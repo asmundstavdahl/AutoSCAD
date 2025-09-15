@@ -96,7 +96,6 @@ echo "\n--- Processing Step ---\n";
     $specFulfilled = stripos($eval, "yes") !== false;
     if ($specFulfilled) {
         echo "✅ Specification fulfilled!\n";
-        break;
     }
     
 
