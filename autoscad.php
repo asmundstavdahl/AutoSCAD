@@ -68,8 +68,8 @@ for ($i = 0; $i < $maxIters; $i++) {
 
     // Step 3: Generate new SCAD code
     $scadCode = callLLM([
-        ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX any errors mentioned below"],
-        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nCompiler Errors/Warnings:\n$errorOutput\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
+        ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$errorOutput\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments"],
+        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
     ]);
     
     // Enhanced validation
@@ -79,13 +79,16 @@ for ($i = 0; $i < $maxIters; $i++) {
         str_contains($scadCode, 'Too many unnamed arguments');
         
     if ($isInvalid) {
-        echo "⚠️ Generated code appears invalid:\n$errorOutput\nReverting to previous version.\n";
+        echo "⚠️ Generated code appears invalid. Errors:\n$errorOutput\nReverting to previous version.\n";
         $scadCode = file_get_contents("model.scad");
+        // Preserve errors for next LLM iteration
+        $errorOutput = "Previous errors:\n$errorOutput";
     }
 
     // Step 4: Evaluate
-    exec("openscad -o render.png model.scad"); 
+    exec("openscad -o render.png model.scad 2>&1", $evalErrors, $evalReturnCode); 
     $renderBase64 = imageToBase64("render.png");
+    $errorOutput .= $evalReturnCode !== 0 ? "\nEvaluation Errors:\n" . implode("\n", $evalErrors) : "";
     $dataURI = 'data:image/png;base64,' . $renderBase64;
     $eval = callLLM([
         ["role" => "system", "content" => "You are a strict evaluator."],
