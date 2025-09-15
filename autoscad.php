@@ -53,26 +53,33 @@ for ($i = 0; $i < $maxIters; $i++) {
 
     // Step 1: Render current SCAD code
     file_put_contents("model.scad", $scadCode);
-    exec("openscad -o render.png model.scad"); 
+    $errors = [];
+    exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode); 
     $renderBase64 = imageToBase64("render.png");
+    $errorOutput = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
 
     // Step 2: Make a plan
     $dataURI = 'data:image/png;base64,' . $renderBase64;
     $plan = callLLM([
         ["role" => "system", "content" => "You are an expert SCAD engineer."],
-        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nRendered model (base64 PNG):\n$dataURI\n\nUse the image to make a concrete plan to modify the SCAD code to fulfill the specification. Provide the plan as JSON steps."]
+        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nRendered model (base64 PNG):\n$dataURI\n\n$errorOutput\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as JSON steps."]
     ]);
     echo "Plan:\n$plan\n";
 
     // Step 3: Generate new SCAD code
     $scadCode = callLLM([
-        ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan"],
-        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code without any additional text:"]
+        ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX any errors mentioned below"],
+        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nCompiler Errors/Warnings:\n$errorOutput\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
     ]);
     
-    // Basic syntax validation
-    if (!str_starts_with(trim($scadCode), 'module') && !str_starts_with(trim($scadCode), 'function') && !str_contains($scadCode, '();')) {
-        echo "⚠️ Generated code appears invalid. Reverting to previous version.\n";
+    // Enhanced validation
+    $isInvalid = empty(trim($scadCode)) || 
+        (!str_contains($scadCode, 'module') && !str_contains($scadCode, 'function')) ||
+        str_contains($scadCode, 'Recursion detected') ||
+        str_contains($scadCode, 'Too many unnamed arguments');
+        
+    if ($isInvalid) {
+        echo "⚠️ Generated code appears invalid:\n$errorOutput\nReverting to previous version.\n";
         $scadCode = file_get_contents("model.scad");
     }
 
