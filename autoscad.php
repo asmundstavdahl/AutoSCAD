@@ -52,7 +52,7 @@ function callLLM($messages)
 }
 
 // Step 1: Render
-echo "Rendering SCAD model...\n";
+echo "Rendering…\n";
 $errors = [];
 exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
 $renderBase64 = imageToBase64("render.png");
@@ -61,7 +61,7 @@ $imageDataURI = 'data:image/png;base64,' . $renderBase64;
 $errorOutput = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
 
 // Step 2: Evaluate
-echo "Evaluating SCAD model against specification...\n";
+echo "Evaluating… ";
 $eval = callLLM([
     ["role" => "system", "content" => "You are the Evaluator of AutoSCAD. Your job is to evaluate the provided SCAD code and its rendered model against the specification. Evaluate if the specification is fully satisfied. Answer only YES or NO."],
     ["role" => "user", "content" => "Specification:\n$specDoc\n\nRendered model (base64 PNG):\n$imageDataURI\n\nEvaluate if the specification is fully satisfied. Answer only YES or NO on the first line, followed by a concise explanation on the second line. Only respond with those two lines."],
@@ -75,21 +75,21 @@ if ($specFulfilled) {
 }
 
 // Step 3: Make a plan
+echo "Planning…\n";
 $plan = callLLM([
     ["role" => "system", "content" => "You are an expert SCAD engineer."],
     ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nRendered model (base64 PNG):\n$imageDataURI\n\n$errorOutput\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as JSON steps."]
 ]);
-echo "Plan:\n$plan\n";
 
 // Step 4: Generate new SCAD code
+echo "Creating…\n";
 $scadCode = callLLM([
     ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$errorOutput\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments"],
     ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
 ]);
 file_put_contents("model.scad", $scadCode);
 
-echo "The model was modified. Please review the result.\n";
-echo "Heres the diff:\n";
+echo "Diff:          \n";
 $originalScadCodeFile = tempnam(sys_get_temp_dir(), "autoscad-prev-version");
 file_put_contents($originalScadCodeFile, $originalScadCode);
 exec("diff $originalScadCodeFile model.scad", $diffLines);
