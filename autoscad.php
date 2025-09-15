@@ -66,9 +66,15 @@ for ($i = 0; $i < $maxIters; $i++) {
 
     // Step 3: Generate new SCAD code
     $scadCode = callLLM([
-        ["role" => "system", "content" => "You are a SCAD code generator. Output only SCAD code."],
-        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan"]
+        ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan"],
+        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code without any additional text:"]
     ]);
+    
+    // Basic syntax validation
+    if (!str_starts_with(trim($scadCode), 'module') && !str_starts_with(trim($scadCode), 'function') && !str_contains($scadCode, '();')) {
+        echo "⚠️ Generated code appears invalid. Reverting to previous version.\n";
+        $scadCode = file_get_contents("model.scad");
+    }
 
     // Step 4: Evaluate
     exec("openscad -o render.png model.scad"); 
