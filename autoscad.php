@@ -3,6 +3,7 @@
 // Config
 $apiKey = getenv("OPENROUTER_API_KEY");
 $baseUrl = "https://openrouter.ai/api/v1/chat/completions";
+$llmName = "google/gemini-2.5-flash";
 
 // Load files
 $specDoc  = file_get_contents("spec.md");
@@ -15,11 +16,11 @@ function imageToBase64($path) {
 }
 
 // Helper: call OpenRouter LLM
-function callLLM($messages, $model = "openai/gpt-4o-mini") {
-    global $apiKey, $baseUrl;
+function callLLM($messages) {
+    global $apiKey, $baseUrl, $llmName;
 
     $payload = [
-        "model" => $model,
+        "model" => $llmName,
         "messages" => $messages,
     ];
 
