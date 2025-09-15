@@ -57,9 +57,10 @@ for ($i = 0; $i < $maxIters; $i++) {
     $renderBase64 = imageToBase64("render.png");
 
     // Step 2: Make a plan
+    $dataURI = 'data:image/png;base64,' . $renderBase64;
     $plan = callLLM([
         ["role" => "system", "content" => "You are an expert SCAD engineer."],
-        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nRendered model (base64 PNG):\n$dataURI = 'data:image/png;base64,$renderBase64';\nUse the image to make a concrete plan to modify the SCAD code to fulfill the specification. Provide the plan as JSON steps."]
+        ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nRendered model (base64 PNG):\n$dataURI\n\nUse the image to make a concrete plan to modify the SCAD code to fulfill the specification. Provide the plan as JSON steps."]
     ]);
     echo "Plan:\n$plan\n";
 
@@ -72,9 +73,10 @@ for ($i = 0; $i < $maxIters; $i++) {
     // Step 4: Evaluate
     exec("openscad -o render.png model.scad"); 
     $renderBase64 = imageToBase64("render.png");
+    $dataURI = 'data:image/png;base64,' . $renderBase64;
     $eval = callLLM([
         ["role" => "system", "content" => "You are a strict evaluator."],
-        ["role" => "user", "content" => "Specification:\n$specDoc\n\nRendered model (base64 PNG):\n$dataURI = 'data:image/png;base64,$renderBase64';\nEvaluate if the specification is fully satisfied. Answer only YES or NO."]
+        ["role" => "user", "content" => "Specification:\n$specDoc\n\nRendered model (base64 PNG):\n$dataURI\n\nEvaluate if the specification is fully satisfied. Answer only YES or NO."]
     ]);
 
     echo "Evaluation: $eval\n";
