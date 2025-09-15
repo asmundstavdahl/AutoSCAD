@@ -45,12 +45,8 @@ function callLLM($messages) {
     return $data["choices"][0]["message"]["content"] ?? "";
 }
 
-// Agent loop
-$specFulfilled = false;
-$maxIters = 5;
-
-for ($i = 0; $i < $maxIters; $i++) {
-    echo "\n--- Iteration ".($i+1)." ---\n";
+// Single processing step
+echo "\n--- Processing Step ---\n";
 
     // Step 1: Render current SCAD code
     file_put_contents("model.scad", $scadCode);
@@ -103,12 +99,4 @@ for ($i = 0; $i < $maxIters; $i++) {
         break;
     }
     
-    // Wait for user to continue
-    echo "Press Enter to continue to next iteration...";
-    fgets(STDIN);
-}
-
-if (!$specFulfilled) {
-    echo "⚠️ Max iterations reached without fulfilling spec.\n";
-}
 
