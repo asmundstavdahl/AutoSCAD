@@ -56,6 +56,7 @@ echo "Rendering SCAD model...\n";
 $errors = [];
 exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
 $renderBase64 = imageToBase64("render.png");
+unlink("render.png");
 $imageDataURI = 'data:image/png;base64,' . $renderBase64;
 $errorOutput = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
 
