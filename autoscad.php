@@ -102,6 +102,10 @@ for ($i = 0; $i < $maxIters; $i++) {
         echo "✅ Specification fulfilled!\n";
         break;
     }
+    
+    // Wait for user to continue
+    echo "Press Enter to continue to next iteration...";
+    fgets(STDIN);
 }
 
 if (!$specFulfilled) {
