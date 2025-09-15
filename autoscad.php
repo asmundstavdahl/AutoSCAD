@@ -60,7 +60,23 @@ exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
 $renderBase64 = imageToBase64("render.png");
 $errorOutput = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
 
-// Step 2: Make a plan
+// Step 2: Evaluate
+exec("openscad -o render.png model.scad 2>&1", $evalErrors, $evalReturnCode);
+$renderBase64 = imageToBase64("render.png");
+$errorOutput .= $evalReturnCode !== 0 ? "\nEvaluation Errors:\n" . implode("\n", $evalErrors) : "";
+$dataURI = 'data:image/png;base64,' . $renderBase64;
+$eval = callLLM([
+    ["role" => "system", "content" => "You are a strict evaluator."],
+    ["role" => "user", "content" => "Specification:\n$specDoc\n\nRendered model (base64 PNG):\n$dataURI\n\nEvaluate if the specification is fully satisfied. Answer only YES or NO."]
+]);
+
+echo "Evaluation: $eval\n";
+$specFulfilled = stripos($eval, "yes") !== false;
+if ($specFulfilled) {
+    echo "✅ Specification fulfilled!\n";
+}
+
+// Step 3: Make a plan
 $dataURI = 'data:image/png;base64,' . $renderBase64;
 $plan = callLLM([
     ["role" => "system", "content" => "You are an expert SCAD engineer."],
@@ -68,7 +84,7 @@ $plan = callLLM([
 ]);
 echo "Plan:\n$plan\n";
 
-// Step 3: Generate new SCAD code
+// Step 4: Generate new SCAD code
 $scadCode = callLLM([
     ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$errorOutput\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments"],
     ["role" => "user", "content" => "Specification:\n$specDoc\n\nCurrent SCAD code:\n$scadCode\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
