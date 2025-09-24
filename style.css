@@ -37,6 +37,11 @@ button:hover {
     background-color: #0056b3;
 }
 
+button:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
 pre {
     background-color: #f8f9fa;
     padding: 10px;
@@ -47,4 +52,12 @@ pre {
 img {
     max-width: 100%;
     height: auto;
+}
+
+#live-updates p {
+    margin: 5px 0;
+}
+
+#live-updates pre {
+    margin: 10px 0;
 }
