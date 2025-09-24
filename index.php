@@ -1,60 +1,6 @@
 <?php
 session_start();
-// Config
-$api_key = getenv("OPENROUTER_API_KEY");
-$base_url = "https://openrouter.ai/api/v1/chat/completions";
-$llm_name = "google/gemini-2.5-flash";
-#$llm_name = "google/gemma-3-27b-it";
-
-// Helper: read image and convert to base64
-function image_to_base64($path)
-{
-    if (file_exists($path)) {
-        $data = file_get_contents($path);
-        return base64_encode($data);
-    }
-    return "";
-}
-
-// Helper: clean SCAD code from markdown blocks
-function clean_scad_code($code)
-{
-    $code = trim($code);
-    if (preg_match('/^```scad\s*\n(.*)\n```$/s', $code, $matches)) {
-        return $matches[1];
-    }
-    return $code;
-}
-
-// Helper: call OpenRouter LLM
-function call_llm($messages)
-{
-    global $api_key, $base_url, $llm_name;
-    if (!$api_key) {
-        return "API key not set.";
-    }
-    $payload = [
-        "model" => $llm_name,
-        "messages" => $messages,
-    ];
-    $ch = curl_init($base_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Authorization: Bearer $api_key",
-        "Content-Type: application/json",
-        "HTTP-Referer: https://github.com/asmundstavdahl/AutoSCAD",
-        "X-Title: AutoSCAD",
-    ]);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    $result = curl_exec($ch);
-    if ($result === false) {
-        return "cURL Error: " . curl_error($ch);
-    }
-    curl_close($ch);
-    $data = json_decode($result, true);
-    return $data["choices"][0]["message"]["content"] ?? "No response.";
-}
+require_once 'common.php';
 
 // Load current spec
 $spec_doc = file_exists("spec.md") ? file_get_contents("spec.md") : "";
@@ -95,80 +41,8 @@ if (isset($_GET['sse'])) {
         flush();
     }
 
-    while (!$spec_fulfilled && $iteration < $max_iterations) {
-        $iteration++;
-        error_log("Starting iteration $iteration");
-        sendSSE('iteration', ['iteration' => $iteration, 'message' => "Starting iteration $iteration"]);
-
-        // Render
-        error_log("Rendering model for iteration $iteration");
-        $errors = [];
-        exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
-        $render_base64 = image_to_base64("render.png");
-        if (file_exists("render.png")) {
-            unlink("render.png");
-        }
-        $image_data_uri = 'data:image/png;base64,' . $render_base64;
-        $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
-        error_log("Render completed for iteration $iteration, errors: " . ($error_output ? 'yes' : 'no'));
-        sendSSE('render', ['image' => $image_data_uri, 'errors' => $error_output]);
-
-        // Evaluate
-        error_log("Evaluating model for iteration $iteration");
-        $eval = call_llm([
-            ["role" => "system", "content" => "You are the Evaluator of AutoSCAD. Your job is to evaluate the provided SCAD code and its rendered model against the specification. Evaluate if the specification is fully satisfied. Answer only YES or NO."],
-            ["role" => "user", "content" => [
-                ["type" => "text", "text" => "Specification:\n$spec_doc\n\nRendered model:"],
-                ["type" => "image_url", "image_url" => ["url" => $image_data_uri]]
-            ]],
-        ]);
-        [$eval_line, $explanation] = explode("\n", $eval);
-        error_log("Evaluation for iteration $iteration: $eval_line ($explanation)");
-        sendSSE('eval', ['result' => $eval_line, 'explanation' => $explanation]);
-        $spec_fulfilled = stripos($eval_line, "yes") !== false;
-        if ($spec_fulfilled) {
-            error_log("Specification fulfilled after iteration $iteration");
-            sendSSE('done', ['message' => 'Specification fulfilled after iteration ' . $iteration]);
-            break;
-        }
-
-        // Plan
-        error_log("Planning for iteration $iteration");
-        $plan = call_llm([
-            ["role" => "system", "content" => "You are an expert SCAD engineer."],
-            ["role" => "user", "content" => [
-                ["type" => "text", "text" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\n$error_output\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as JSON steps."],
-                ["type" => "image_url", "image_url" => ["url" => $image_data_uri]]
-            ]],
-        ]);
-        error_log("Plan generated for iteration $iteration");
-        sendSSE('plan', ['plan' => $plan]);
-
-        // Generate new SCAD
-        error_log("Generating new SCAD for iteration $iteration");
-        $scad_code = clean_scad_code(call_llm([
-            ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$error_output\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments"],
-            ["role" => "user", "content" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code that fixes these errors:"],
-        ]));
-        file_put_contents("model.scad", $scad_code);
-        error_log("New SCAD generated and saved for iteration $iteration");
-        sendSSE('scad', ['code' => $scad_code]);
-    }
-
-    if (!$spec_fulfilled) {
-        // Send final SCAD and render even if max iterations reached
-        sendSSE('scad', ['code' => $scad_code]);
-        $errors = [];
-        exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
-        $render_base64 = image_to_base64("render.png");
-        if (file_exists("render.png")) {
-            unlink("render.png");
-        }
-        $image_data_uri = 'data:image/png;base64,' . $render_base64;
-        $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
-        sendSSE('render', ['image' => $image_data_uri, 'errors' => $error_output]);
-        sendSSE('done', ['message' => 'Max iterations reached']);
-    }
+    // Run the generation
+    run_scad_generation($spec_doc, $scad_code, 'sendSSE');
     // Clean up spec file
     if (file_exists("current_spec.txt")) {
         unlink("current_spec.txt");
