@@ -12,3 +12,10 @@
 - Preserve existing functionality when modifying code
 - Avoid recursive modules in SCAD generation
 - Ensure generated SCAD code is valid
+
+## Absolute rules for this project
+
+- avoid 3rd party packages
+- prefer functions and built-in data types over classes
+- if classes are deemed largely beneficial sometimes, only use pure data classes (no methods!)
+- zero build steps is a design requirement
