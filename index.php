@@ -9,8 +9,8 @@ if (!isset($_SESSION['csrf_token'])) {
 $csrf_token = $_SESSION['csrf_token'];
 
 // Load current spec
-$spec_doc = file_exists("spec.md") ? file_get_contents("spec.md") : "";
-$scad_code = file_exists("model.scad") ? file_get_contents("model.scad") : "";
+$spec_doc = $_SESSION['spec'] ?? file_exists("spec.md") ? file_get_contents("spec.md") : "";
+$scad_code = $_SESSION['scad'] ?? file_exists("model.scad") ? file_get_contents("model.scad") : "";
 $output = "";
 $image_data_uri = "";
 $final_scad = "";
@@ -25,15 +25,18 @@ if (isset($_GET['sse'])) {
     ob_start();
     error_log("SSE started");
 
-    if (!file_exists("current_spec.txt")) {
-        error_log("No current_spec.txt found");
+    if (!isset($_SESSION['current_spec'])) {
+        error_log("No current_spec in session");
         echo "data: {\"error\": \"No spec found\"}\n\n";
         exit;
     }
-    $spec_doc = file_get_contents("current_spec.txt");
-    error_log("Loaded spec from current_spec.txt");
+    $spec_doc = $_SESSION['current_spec'];
+    error_log("Loaded spec from session");
     file_put_contents("spec.md", $spec_doc);
-    $scad_code = file_exists("model.scad") ? file_get_contents("model.scad") : "";
+    $scad_code = $_SESSION['scad'] ?? "";
+    if (empty($scad_code) && file_exists("model.scad")) {
+        $scad_code = file_get_contents("model.scad");
+    }
     $original_scad_code = $scad_code;
     $max_iterations = 3; // Prevent infinite loop
     $iteration = 0;
@@ -47,13 +50,18 @@ if (isset($_GET['sse'])) {
         flush();
     }
 
+    // Check dependencies
+    $dep_errors = check_dependencies();
+    if (!empty($dep_errors)) {
+        sendSSE('dep_error', ['message' => 'Dependencies not met: ' . implode(', ', $dep_errors)]);
+        exit;
+    }
+
     // Run the generation
     run_scad_generation($spec_doc, $scad_code, 'sendSSE');
-    // Clean up spec file
-    if (file_exists("current_spec.txt")) {
-        unlink("current_spec.txt");
-        error_log("Cleaned up current_spec.txt");
-    }
+    // Clean up session
+    unset($_SESSION['current_spec']);
+    error_log("Cleaned up current_spec from session");
     exit;
 }
 
@@ -65,18 +73,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $spec_doc = $_POST['spec'] ?? "";
-    
+    $scad_code = $_POST['scad'] ?? "";
+
     // Sanitize input
     $spec_doc = htmlspecialchars($spec_doc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    
+    $scad_code = htmlspecialchars($scad_code, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    if (empty($spec_doc)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Specification is empty']);
+        exit;
+    }
+
     if (strlen($spec_doc) > 10000) {
         http_response_code(400);
         echo json_encode(['error' => 'Specification too long']);
         exit;
     }
 
-    file_put_contents("spec.md", $spec_doc);
-    file_put_contents("current_spec.txt", $spec_doc);
+    if (strlen($scad_code) > 50000) { // Allow larger for SCAD
+        http_response_code(400);
+        echo json_encode(['error' => 'SCAD code too long']);
+        exit;
+    }
+
+    if (file_put_contents("spec.md", $spec_doc) === false) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to save spec.md']);
+        exit;
+    }
+
+    $_SESSION['current_spec'] = $spec_doc;
+    $_SESSION['scad'] = $scad_code;
+
+    if (!empty($scad_code) && file_put_contents("model.scad", $scad_code) === false) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to save model.scad']);
+        exit;
+    }
     error_log("Spec saved to current_spec.txt");
     
     // Return JSON instead of redirect
@@ -120,17 +154,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label for="spec">Specification:<br>
                 <small class="text-muted">Max 10000 characters</small>
             </label>
-            <textarea 
-                id="spec" 
-                name="spec" 
-                rows="10" 
+            <textarea
+                id="spec"
+                name="spec"
+                rows="10"
                 cols="50"
                 maxlength="10000"
                 required
             ><?php echo htmlspecialchars($spec_doc); ?></textarea><br>
-            <button 
-                type="submit" 
-                id="generateBtn" 
+            <label for="scad">SCAD Code:<br>
+                <small class="text-muted">Leave empty to auto-generate from spec</small>
+            </label>
+            <textarea
+                id="scad"
+                name="scad"
+                rows="10"
+                cols="50"
+            ><?php echo htmlspecialchars($scad_code); ?></textarea><br>
+            <button
+                type="submit"
+                id="generateBtn"
                 disabled
             >Generate SCAD</button>
         </form>
@@ -172,11 +215,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             liveUpdates.scrollTop = liveUpdates.scrollHeight;
         }
 
-        // Enable button when spec is modified
+        // Enable button when spec or scad is modified
         const specInput = document.getElementById('spec');
-        specInput.addEventListener('input', function() {
+        const scadInput = document.getElementById('scad');
+        function enableButton() {
             generateBtn.disabled = false;
-        });
+        }
+        specInput.addEventListener('input', enableButton);
+        scadInput.addEventListener('input', enableButton);
 
         form.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -193,6 +239,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 loading.style.display = 'none';
                 if (response.ok) {
                     const eventSource = new EventSource('index.php?sse=1');
+                    eventSource.addEventListener('message', function(event) {
+                        console.log('SSE message:', event.data);
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.error) {
+                                liveUpdates.innerHTML += `<p>Error: ${data.error}</p>`;
+                                scrollToBottom();
+                                eventSource.close();
+                                generateBtn.disabled = false;
+                            }
+                        } catch (e) {
+                            liveUpdates.innerHTML += `<p>Unexpected message: ${event.data}</p>`;
+                            scrollToBottom();
+                        }
+                    });
                     eventSource.addEventListener('iteration', function(event) {
                         console.log('SSE iteration:', event.data);
                         try {
@@ -285,6 +346,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             const data = JSON.parse(event.data);
                             liveUpdates.innerHTML += `<p>Generated SCAD code:</p><pre>${data.code}</pre>`;
+                            document.getElementById('scad').value = data.code;
                             scrollToBottom();
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
@@ -309,16 +371,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     });
 
-                    eventSource.addEventListener('error', function(event) {
-                        console.log('SSE error:', event);
-                        if (event.readyState === EventSource.CLOSED) {
-                            console.log('Connection closed normally');
-                        } else {
-                            liveUpdates.innerHTML += '<p>Error in connection.</p>';
+                    eventSource.addEventListener('dep_error', function(event) {
+                        console.log('SSE dep error:', event.data);
+                        try {
+                            const data = JSON.parse(event.data);
+                            liveUpdates.innerHTML += `<p>Error: ${data.message}</p>`;
                             scrollToBottom();
+                            eventSource.close();
+                            generateBtn.disabled = false;
+                        } catch (e) {
+                            console.error('JSON parse error:', e, event.data);
+                            liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
+                            eventSource.close();
                             generateBtn.disabled = false;
                         }
+                    });
+
+                    eventSource.addEventListener('connection_error', function(event) {
+                        console.log('SSE connection error:', event);
+                        liveUpdates.innerHTML += '<p>Error in connection.</p>';
+                        scrollToBottom();
                         eventSource.close();
+                        generateBtn.disabled = false;
                     });
                     eventSource.onerror = function() {
                         liveUpdates.innerHTML += '<p>Error in connection.</p>';
@@ -327,9 +402,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         generateBtn.disabled = false;
                     };
                 } else {
-                    liveUpdates.innerHTML += '<p>Failed to start generation.</p>';
-                    scrollToBottom();
-                    generateBtn.disabled = false;
+                    response.json().then(data => {
+                        liveUpdates.innerHTML += '<p>Error: ' + (data.error || 'Unknown error') + '</p>';
+                        scrollToBottom();
+                        generateBtn.disabled = false;
+                    }).catch(() => {
+                        liveUpdates.innerHTML += '<p>Failed to start generation.</p>';
+                        scrollToBottom();
+                        generateBtn.disabled = false;
+                    });
                 }
             }).catch(error => {
                 loading.style.display = 'none';

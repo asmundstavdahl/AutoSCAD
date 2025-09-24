@@ -5,6 +5,20 @@ $api_key = getenv("OPENROUTER_API_KEY");
 $base_url = "https://openrouter.ai/api/v1/chat/completions";
 $llm_name = "google/gemma-3-27b-it";
 
+// Check dependencies
+function check_dependencies() {
+    global $api_key;
+    $errors = [];
+    if (!$api_key) {
+        $errors[] = "OPENROUTER_API_KEY environment variable not set.";
+    }
+    exec("openscad --version 2>&1", $output, $returnCode);
+    if ($returnCode !== 0) {
+        $errors[] = "OpenSCAD not installed or not in PATH.";
+    }
+    return $errors;
+}
+
 // Helper: read image and convert to base64
 function image_to_base64($path)
 {
