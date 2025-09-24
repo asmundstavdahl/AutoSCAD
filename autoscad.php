@@ -3,7 +3,7 @@
 require_once 'common.php';
 
 // Load files
-$spec_doc  = file_get_contents("spec.md");
+$spec_doc = file_get_contents("spec.md");
 if (!file_exists("model.scad")) {
     touch("model.scad");
 }
@@ -14,7 +14,6 @@ $original_scad_code = $scad_code;
 $timestamp = date('Y-m-d_H-i-s');
 if (file_exists("model.scad")) {
     copy("model.scad", "/tmp/model_$timestamp.scad");
-    unlink("model.scad"); // Remove to start with blank slate
 }
 
 // Callback for CLI output
