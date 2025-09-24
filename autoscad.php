@@ -3,8 +3,8 @@
 // Config
 $api_key = getenv("OPENROUTER_API_KEY");
 $base_url = "https://openrouter.ai/api/v1/chat/completions";
-#$llm_name = "google/gemini-2.5-flash";
-$llm_name = "google/gemma-3-27b-it";
+$llm_name = "google/gemini-2.5-flash";
+#$llm_name = "google/gemma-3-27b-it";
 
 // Load files
 $spec_doc  = file_get_contents("spec.md");
@@ -26,6 +26,16 @@ function image_to_base64($path)
 {
     $data = file_get_contents($path);
     return base64_encode($data);
+}
+
+// Helper: clean SCAD code from markdown blocks
+function clean_scad_code($code)
+{
+    $code = trim($code);
+    if (preg_match('/^```scad\s*\n(.*)\n```$/s', $code, $matches)) {
+        return $matches[1];
+    }
+    return $code;
 }
 
 // Helper: call OpenRouter LLM
@@ -101,10 +111,10 @@ $plan = call_llm([
 
 // Step 4: Generate new SCAD code
 echo "Creating…\n";
-$scad_code = call_llm([
+$scad_code = clean_scad_code(call_llm([
     ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$error_output\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments\n8. NEVER use imperative statements like continue, break, or loops with side effects"],
     ["role" => "user", "content" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
-]);
+]));
 file_put_contents("model.scad", $scad_code);
 
 echo "Diff:          \n";
