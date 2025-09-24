@@ -133,11 +133,22 @@ if (isset($_GET['sse'])) {
         file_put_contents("model.scad", $scad_code);
         error_log("New SCAD generated and saved for iteration $iteration");
         sendSSE('scad', ['code' => $scad_code]);
-    }
+     }
 
-    if ($iteration >= $max_iterations) {
-        sendSSE('done', ['message' => 'Max iterations reached']);
-    }
+     if (!$spec_fulfilled) {
+         // Send final SCAD and render even if max iterations reached
+         sendSSE('scad', ['code' => $scad_code]);
+         $errors = [];
+         exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
+         $render_base64 = image_to_base64("render.png");
+         if (file_exists("render.png")) {
+             unlink("render.png");
+         }
+         $image_data_uri = 'data:image/png;base64,' . $render_base64;
+         $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
+         sendSSE('render', ['image' => $image_data_uri, 'errors' => $error_output]);
+         sendSSE('done', ['message' => 'Max iterations reached']);
+     }
     // Clean up spec file
     if (file_exists("current_spec.txt")) {
         unlink("current_spec.txt");
@@ -249,27 +260,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     });
 
-                    eventSource.addEventListener('plan', function(event) {
-                        console.log('SSE plan:', event.data);
-                        try {
-                            const data = JSON.parse(event.data);
-                            let html = '<p>Plan:</p>';
-                            if (Array.isArray(data.plan)) {
-                                data.plan.forEach(step => {
-                                    html += `<details><summary>${step.step}</summary>`;
-                                    if (step.description) html += `<p>${step.description}</p>`;
-                                    if (step.code) html += `<pre>${step.code}</pre>`;
-                                    html += `</details>`;
-                                });
-                            } else {
-                                html += `<p>${data.plan}</p>`;
-                            }
-                            liveUpdates.innerHTML += html;
-                        } catch (e) {
-                            console.error('JSON parse error:', e, event.data);
-                            liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
-                        }
-                    });
+                     eventSource.addEventListener('plan', function(event) {
+                         console.log('SSE plan:', event.data);
+                         try {
+                             const data = JSON.parse(event.data);
+                             let html = '<p>Plan:</p>';
+                             let plan = data.plan;
+                             // If plan is a JSON string, parse it (strip markdown code blocks first)
+                             if (typeof plan === 'string') {
+                                 // Extract JSON from markdown code block if present
+                                 const jsonMatch = plan.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                                 if (jsonMatch) {
+                                     plan = jsonMatch[1].trim();
+                                 }
+                                 try {
+                                     plan = JSON.parse(plan);
+                                 } catch (e) {
+                                     // If not JSON, treat as plain text
+                                 }
+                             }
+                             if (Array.isArray(plan)) {
+                                 plan.forEach(step => {
+                                     html += `<details><summary>${step.step}</summary>`;
+                                     if (step.description) html += `<p>${step.description}</p>`;
+                                     if (step.code) html += `<pre>${step.code}</pre>`;
+                                     html += `</details>`;
+                                 });
+                             } else if (typeof plan === 'object') {
+                                 // Pretty-print object
+                                 html += `<pre>${JSON.stringify(plan, null, 2)}</pre>`;
+                             } else {
+                                 // Plain text
+                                 html += `<p>${plan}</p>`;
+                             }
+                             liveUpdates.innerHTML += html;
+                         } catch (e) {
+                             console.error('JSON parse error:', e, event.data);
+                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                         }
+                     });
 
                     eventSource.addEventListener('scad', function(event) {
                         console.log('SSE scad:', event.data);
