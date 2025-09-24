@@ -63,7 +63,17 @@ function run_scad_generation($spec_doc, $initial_scad_code, $output_callback = n
     $iteration = 0;
     $spec_fulfilled = false;
 
-    while (!$spec_fulfilled && $iteration < $max_iterations) {
+     // Archive any residual render.png before first iteration
+     $timestamp = date('Y-m-d_H-i-s');
+     if (file_exists("render.png")) {
+         copy("render.png", "/tmp/render_$timestamp.png");
+         unlink("render.png");
+     }
+
+     // Ensure model.scad starts with initial code for blank slate
+     file_put_contents("model.scad", $scad_code);
+
+     while (!$spec_fulfilled && $iteration < $max_iterations) {
         $iteration++;
         if ($output_callback) $output_callback('iteration', ['iteration' => $iteration, 'message' => "Starting iteration $iteration"]);
 

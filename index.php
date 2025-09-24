@@ -105,6 +105,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const liveUpdates = document.getElementById('live-updates');
         const finalResults = document.getElementById('final-results');
 
+        function scrollToBottom() {
+            liveUpdates.scrollTop = liveUpdates.scrollHeight;
+        }
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             generateBtn.disabled = true;
@@ -123,9 +127,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             const data = JSON.parse(event.data);
                             liveUpdates.innerHTML += `<p><strong>Iteration ${data.iteration}:</strong> ${data.message}</p>`;
+                            scrollToBottom();
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
                         }
                     });
 
@@ -135,13 +141,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             const data = JSON.parse(event.data);
                             if (data.image) {
                                 liveUpdates.innerHTML += `<p>Rendered model:</p><img src="${data.image}" alt="Iteration render" style="max-width: 100%;">`;
+                                scrollToBottom();
                             }
                             if (data.errors) {
                                 liveUpdates.innerHTML += `<p>Errors: ${data.errors}</p>`;
+                                scrollToBottom();
                             }
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
                         }
                     });
 
@@ -150,9 +159,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             const data = JSON.parse(event.data);
                             liveUpdates.innerHTML += `<p>Evaluation: ${data.result} (${data.explanation})</p>`;
+                            scrollToBottom();
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
                         }
                     });
 
@@ -190,9 +201,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 html += `<p>${plan}</p>`;
                             }
                             liveUpdates.innerHTML += html;
+                            scrollToBottom();
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
                         }
                     });
 
@@ -201,9 +214,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             const data = JSON.parse(event.data);
                             liveUpdates.innerHTML += `<p>Generated SCAD code:</p><pre>${data.code}</pre>`;
+                            scrollToBottom();
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
                         }
                     });
 
@@ -212,12 +227,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             const data = JSON.parse(event.data);
                             liveUpdates.innerHTML += `<p><strong>${data.message}</strong></p>`;
+                            scrollToBottom();
                             eventSource.close();
                             generateBtn.disabled = false;
                             finalResults.style.display = 'block';
                         } catch (e) {
                             console.error('JSON parse error:', e, event.data);
                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                            scrollToBottom();
                         }
                     });
 
@@ -228,21 +245,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             console.log('Connection closed normally');
                         } else {
                             liveUpdates.innerHTML += '<p>Error in connection.</p>';
+                            scrollToBottom();
                             generateBtn.disabled = false;
                         }
                         eventSource.close();
                     });
                     eventSource.onerror = function() {
                         liveUpdates.innerHTML += '<p>Error in connection.</p>';
+                        scrollToBottom();
                         eventSource.close();
                         generateBtn.disabled = false;
                     };
                 } else {
                     liveUpdates.innerHTML += '<p>Failed to start generation.</p>';
+                    scrollToBottom();
                     generateBtn.disabled = false;
                 }
             }).catch(error => {
                 liveUpdates.innerHTML += '<p>Error: ' + error.message + '</p>';
+                scrollToBottom();
                 generateBtn.disabled = false;
             });
         });

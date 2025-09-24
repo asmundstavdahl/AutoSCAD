@@ -54,6 +54,14 @@ img {
     height: auto;
 }
 
+#live-updates {
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #f8f9fa;
+}
+
 #live-updates p {
     margin: 5px 0;
 }
