@@ -14,6 +14,13 @@ if (!file_exists("model.scad")) {
 $scad_code = file_get_contents("model.scad");
 $original_scad_code = $scad_code;
 
+// Archive current model.scad to /tmp with timestamp
+$timestamp = date('Y-m-d_H-i-s');
+if (file_exists("model.scad")) {
+    copy("model.scad", "/tmp/model_$timestamp.scad");
+    unlink("model.scad"); // Remove to start with blank slate
+}
+
 // Helper: read image and convert to base64
 function image_to_base64($path)
 {
@@ -57,6 +64,10 @@ echo "Rendering…\n";
 $errors = [];
 exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
 $render_base64 = image_to_base64("render.png");
+// Archive render.png to /tmp with timestamp
+if (file_exists("render.png")) {
+    copy("render.png", "/tmp/render_$timestamp.png");
+}
 unlink("render.png");
 $image_data_uri = 'data:image/png;base64,' . $render_base64;
 $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
@@ -65,7 +76,10 @@ $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors
 echo "Evaluating… ";
 $eval = call_llm([
     ["role" => "system", "content" => "You are the Evaluator of AutoSCAD. Your job is to evaluate the provided SCAD code and its rendered model against the specification. Evaluate if the specification is fully satisfied. Answer only YES or NO."],
-    ["role" => "user", "content" => "Specification:\n$spec_doc\n\nRendered model (base64 PNG):\n$image_data_uri\n\nEvaluate if the specification is fully satisfied. Answer only YES or NO on the first line, followed by a concise explanation on the second line. Only respond with those two lines."],
+    ["role" => "user", "content" => [
+        ["type" => "text", "text" => "Specification:\n$spec_doc\n\nRendered model:"],
+        ["type" => "image_url", "image_url" => ["url" => $image_data_uri]]
+    ]],
 ]);
 
 [$eval, $explanation] = explode("\n", $eval);
@@ -79,13 +93,16 @@ if ($spec_fulfilled) {
 echo "Planning…\n";
 $plan = call_llm([
     ["role" => "system", "content" => "You are an expert SCAD engineer."],
-    ["role" => "user", "content" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\nRendered model (base64 PNG):\n$image_data_uri\n\n$error_output\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as JSON steps."]
+    ["role" => "user", "content" => [
+        ["type" => "text", "text" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\n$error_output\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as JSON steps."],
+        ["type" => "image_url", "image_url" => ["url" => $image_data_uri]]
+    ]],
 ]);
 
 // Step 4: Generate new SCAD code
 echo "Creating…\n";
 $scad_code = call_llm([
-    ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$error_output\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments"],
+    ["role" => "system", "content" => "You are a SCAD code generator. Follow these rules:\n1. ONLY output valid SCAD syntax\n2. NEVER add markdown formatting\n3. PRESERVE existing functionality\n4. IMPLEMENT changes from the plan\n5. FIX ALL these errors:\n$error_output\n6. NEVER create recursive modules\n7. ALWAYS use correct function arguments\n8. NEVER use imperative statements like continue, break, or loops with side effects"],
     ["role" => "user", "content" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\nPlan:\n$plan\n\nGenerate ONLY valid SCAD code that fixes these errors:"]
 ]);
 file_put_contents("model.scad", $scad_code);

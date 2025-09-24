@@ -3,10 +3,12 @@ session_start();
 // Config
 $api_key = getenv("OPENROUTER_API_KEY");
 $base_url = "https://openrouter.ai/api/v1/chat/completions";
-$llm_name = "google/gemini-2.5-flash";
+#$llm_name = "google/gemini-2.5-flash";
+$llm_name = "google/gemma-3-27b-it";
 
 // Helper: read image and convert to base64
-function image_to_base64($path) {
+function image_to_base64($path)
+{
     if (file_exists($path)) {
         $data = file_get_contents($path);
         return base64_encode($data);
@@ -15,7 +17,8 @@ function image_to_base64($path) {
 }
 
 // Helper: call OpenRouter LLM
-function call_llm($messages) {
+function call_llm($messages)
+{
     global $api_key, $base_url, $llm_name;
     if (!$api_key) {
         return "API key not set.";
@@ -56,9 +59,9 @@ if (isset($_GET['sse'])) {
     header('Cache-Control: no-cache');
     header('Connection: keep-alive');
     header('Access-Control-Allow-Origin: *');
-     while (ob_get_level()) ob_end_flush();
-     ob_start();
-     error_log("SSE started");
+    while (ob_get_level()) ob_end_flush();
+    ob_start();
+    error_log("SSE started");
 
     if (!file_exists("current_spec.txt")) {
         error_log("No current_spec.txt found");
@@ -74,7 +77,8 @@ if (isset($_GET['sse'])) {
     $iteration = 0;
     $spec_fulfilled = false;
 
-    function sendSSE($event, $data) {
+    function sendSSE($event, $data)
+    {
         echo "event: $event\n";
         echo "data: " . json_encode($data) . "\n\n";
         ob_flush();
@@ -103,7 +107,10 @@ if (isset($_GET['sse'])) {
         error_log("Evaluating model for iteration $iteration");
         $eval = call_llm([
             ["role" => "system", "content" => "You are the Evaluator of AutoSCAD. Your job is to evaluate the provided SCAD code and its rendered model against the specification. Evaluate if the specification is fully satisfied. Answer only YES or NO."],
-            ["role" => "user", "content" => "Specification:\n$spec_doc\n\nRendered model (base64 PNG):\n$image_data_uri\n\nEvaluate if the specification is fully satisfied. Answer only YES or NO on the first line, followed by a concise explanation on the second line. Only respond with those two lines."],
+            ["role" => "user", "content" => [
+                ["type" => "text", "text" => "Specification:\n$spec_doc\n\nRendered model:"],
+                ["type" => "image_url", "image_url" => ["url" => $image_data_uri]]
+            ]],
         ]);
         [$eval_line, $explanation] = explode("\n", $eval);
         error_log("Evaluation for iteration $iteration: $eval_line ($explanation)");
@@ -119,7 +126,10 @@ if (isset($_GET['sse'])) {
         error_log("Planning for iteration $iteration");
         $plan = call_llm([
             ["role" => "system", "content" => "You are an expert SCAD engineer."],
-            ["role" => "user", "content" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\nRendered model (base64 PNG):\n$image_data_uri\n\n$error_output\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as a JSON array of objects, each with 'step' (string) and 'description' (string) keys. Example: [{\"step\": \"Analyze the current model\", \"description\": \"Description here\"}]"],
+            ["role" => "user", "content" => [
+                ["type" => "text", "text" => "Specification:\n$spec_doc\n\nCurrent SCAD code:\n$scad_code\n\n$error_output\n\nUse the image and error messages to make a concrete plan to modify the SCAD code. Provide the plan as JSON steps."],
+                ["type" => "image_url", "image_url" => ["url" => $image_data_uri]]
+            ]],
         ]);
         error_log("Plan generated for iteration $iteration");
         sendSSE('plan', ['plan' => $plan]);
@@ -133,22 +143,22 @@ if (isset($_GET['sse'])) {
         file_put_contents("model.scad", $scad_code);
         error_log("New SCAD generated and saved for iteration $iteration");
         sendSSE('scad', ['code' => $scad_code]);
-     }
+    }
 
-     if (!$spec_fulfilled) {
-         // Send final SCAD and render even if max iterations reached
-         sendSSE('scad', ['code' => $scad_code]);
-         $errors = [];
-         exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
-         $render_base64 = image_to_base64("render.png");
-         if (file_exists("render.png")) {
-             unlink("render.png");
-         }
-         $image_data_uri = 'data:image/png;base64,' . $render_base64;
-         $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
-         sendSSE('render', ['image' => $image_data_uri, 'errors' => $error_output]);
-         sendSSE('done', ['message' => 'Max iterations reached']);
-     }
+    if (!$spec_fulfilled) {
+        // Send final SCAD and render even if max iterations reached
+        sendSSE('scad', ['code' => $scad_code]);
+        $errors = [];
+        exec("openscad -o render.png model.scad 2>&1", $errors, $returnCode);
+        $render_base64 = image_to_base64("render.png");
+        if (file_exists("render.png")) {
+            unlink("render.png");
+        }
+        $image_data_uri = 'data:image/png;base64,' . $render_base64;
+        $error_output = $returnCode !== 0 ? "OpenSCAD Errors:\n" . implode("\n", $errors) : "";
+        sendSSE('render', ['image' => $image_data_uri, 'errors' => $error_output]);
+        sendSSE('done', ['message' => 'Max iterations reached']);
+    }
     // Clean up spec file
     if (file_exists("current_spec.txt")) {
         unlink("current_spec.txt");
@@ -169,13 +179,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>AutoSCAD Web Interface</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="container">
         <h1>AutoSCAD</h1>
@@ -260,45 +272,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     });
 
-                     eventSource.addEventListener('plan', function(event) {
-                         console.log('SSE plan:', event.data);
-                         try {
-                             const data = JSON.parse(event.data);
-                             let html = '<p>Plan:</p>';
-                             let plan = data.plan;
-                             // If plan is a JSON string, parse it (strip markdown code blocks first)
-                             if (typeof plan === 'string') {
-                                 // Extract JSON from markdown code block if present
-                                 const jsonMatch = plan.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-                                 if (jsonMatch) {
-                                     plan = jsonMatch[1].trim();
-                                 }
-                                 try {
-                                     plan = JSON.parse(plan);
-                                 } catch (e) {
-                                     // If not JSON, treat as plain text
-                                 }
-                             }
-                             if (Array.isArray(plan)) {
-                                 plan.forEach(step => {
-                                     html += `<details><summary>${step.step}</summary>`;
-                                     if (step.description) html += `<p>${step.description}</p>`;
-                                     if (step.code) html += `<pre>${step.code}</pre>`;
-                                     html += `</details>`;
-                                 });
-                             } else if (typeof plan === 'object') {
-                                 // Pretty-print object
-                                 html += `<pre>${JSON.stringify(plan, null, 2)}</pre>`;
-                             } else {
-                                 // Plain text
-                                 html += `<p>${plan}</p>`;
-                             }
-                             liveUpdates.innerHTML += html;
-                         } catch (e) {
-                             console.error('JSON parse error:', e, event.data);
-                             liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
-                         }
-                     });
+                    eventSource.addEventListener('plan', function(event) {
+                        console.log('SSE plan:', event.data);
+                        try {
+                            const data = JSON.parse(event.data);
+                            let html = '<p>Plan:</p>';
+                            let plan = data.plan;
+                            // If plan is a JSON string, parse it (strip markdown code blocks first)
+                            if (typeof plan === 'string') {
+                                // Extract JSON from markdown code block if present
+                                const jsonMatch = plan.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                                if (jsonMatch) {
+                                    plan = jsonMatch[1].trim();
+                                }
+                                try {
+                                    plan = JSON.parse(plan);
+                                } catch (e) {
+                                    // If not JSON, treat as plain text
+                                }
+                            }
+                            if (Array.isArray(plan)) {
+                                plan.forEach(step => {
+                                    html += `<details><summary>${step.step}</summary>`;
+                                    if (step.description) html += `<p>${step.description}</p>`;
+                                    if (step.code) html += `<pre>${step.code}</pre>`;
+                                    html += `</details>`;
+                                });
+                            } else if (typeof plan === 'object') {
+                                // Pretty-print object
+                                html += `<pre>${JSON.stringify(plan, null, 2)}</pre>`;
+                            } else {
+                                // Plain text
+                                html += `<p>${plan}</p>`;
+                            }
+                            liveUpdates.innerHTML += html;
+                        } catch (e) {
+                            console.error('JSON parse error:', e, event.data);
+                            liveUpdates.innerHTML += `<p>Parse error: ${event.data}</p>`;
+                        }
+                    });
 
                     eventSource.addEventListener('scad', function(event) {
                         console.log('SSE scad:', event.data);
@@ -352,4 +364,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         });
     </script>
 </body>
+
 </html>
