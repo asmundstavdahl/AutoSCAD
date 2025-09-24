@@ -3,7 +3,8 @@
 // Config
 $api_key = getenv("OPENROUTER_API_KEY");
 $base_url = "https://openrouter.ai/api/v1/chat/completions";
-$llm_name = "google/gemini-2.5-flash";
+#$llm_name = "google/gemini-2.5-flash";
+$llm_name = "google/gemma-3-27b-it";
 
 // Load files
 $spec_doc  = file_get_contents("spec.md");
