@@ -69,3 +69,13 @@ img {
 #live-updates pre {
     margin: 10px 0;
 }
+
+.sidebar {
+    float: left;
+    width: 30%;
+    margin-right: 2%;
+}
+
+.main {
+    margin-left: 32%;
+}

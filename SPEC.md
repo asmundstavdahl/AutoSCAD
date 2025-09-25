@@ -25,5 +25,5 @@ Model specifications, SCAD code, and rendered images for each project iteration 
 13. User may revise the spec or adjust the SCAD code and perform step 5 to iterate on the result.
 
 ### Web Interface
-- **Project Management:** Users can create new projects or select existing ones from a list.
-- **Iteration Navigation:** For selected projects, users can browse and switch between all stored iterations, viewing the associated spec, SCAD code, and rendered images for each.
+- **Project Management:** Users can create new projects or select existing ones from a dropdown selector. A "New Project" button creates a project with a name based on the current date and time in ISO format. Above the spec and SCAD text areas, a project name field allows editing the current project's name; changes update on "onchange" and refresh the project selector.
+- **Iteration Navigation:** A list of the current project's iterations, sorted by most recent at the top, is displayed on the left side of the page. Iterations are selectable to switch to that iteration. When a new iteration is started, it is sent via Server-Sent Events (SSE) and appears in the iteration selector. When SCAD code is updated or images are rendered, they are sent via SSE and updated in the web page.

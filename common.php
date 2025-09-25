@@ -70,12 +70,16 @@ function call_llm($messages)
 }
 
 // Function to run the SCAD generation loop
-function run_scad_generation($spec_doc, $initial_scad_code, $output_callback = null, $max_iterations = 3)
+function run_scad_generation($spec_doc, $initial_scad_code, $output_callback = null, $max_iterations = 3, $iteration_id = null)
 {
     $scad_code = $initial_scad_code;
     $original_scad_code = $scad_code;
     $iteration = 0;
     $spec_fulfilled = false;
+
+    if ($output_callback && $iteration_id) {
+        $output_callback('new_iteration', ['iteration' => $iteration_id, 'spec' => $spec_doc, 'scad' => $scad_code]);
+    }
 
      // Archive any residual render.png before first iteration
      $timestamp = date('Y-m-d_H-i-s');
@@ -154,6 +158,54 @@ function run_scad_generation($spec_doc, $initial_scad_code, $output_callback = n
     }
 
     return $scad_code;
+}
+
+// Database connection
+function get_db() {
+    return new PDO('sqlite:autoscad.db');
+}
+
+// Project functions
+function create_project($name) {
+    $db = get_db();
+    $stmt = $db->prepare("INSERT INTO projects (name) VALUES (?)");
+    $stmt->execute([$name]);
+    return $db->lastInsertId();
+}
+
+function get_projects() {
+    $db = get_db();
+    $stmt = $db->query("SELECT * FROM projects ORDER BY created_at DESC");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Iteration functions
+function save_iteration($project_id, $spec, $scad_code, $image_path) {
+    $db = get_db();
+    $stmt = $db->prepare("INSERT INTO iterations (project_id, spec, scad_code, image_path) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$project_id, $spec, $scad_code, $image_path]);
+    return $db->lastInsertId();
+}
+
+function get_iterations($project_id) {
+    $db = get_db();
+    $stmt = $db->prepare("SELECT * FROM iterations WHERE project_id = ? ORDER BY created_at DESC");
+    $stmt->execute([$project_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function get_iteration($iteration_id) {
+    $db = get_db();
+    $stmt = $db->prepare("SELECT * FROM iterations WHERE id = ?");
+    $stmt->execute([$iteration_id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function update_project_name($project_id, $name) {
+    $db = get_db();
+    $stmt = $db->prepare("UPDATE projects SET name = ? WHERE id = ?");
+    $stmt->execute([$name, $project_id]);
+    return $db->rowCount() > 0;
 }
 
 ?>
