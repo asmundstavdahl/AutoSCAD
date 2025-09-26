@@ -83,9 +83,7 @@ if (isset($_GET['sse']) && $_GET['sse'] === '1') {
         }
     }
 
-    send_sse_event('done', 'foo');
-    sleep(2);
-    send_sse_event('done', 'bar');
+    send_sse_event('done', 'completed');
     exit;
 }
 
@@ -111,9 +109,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'generate') {
         // Generation handled via SSE
         echo json_encode(['success' => true]);
+    } elseif ($action === 'render') {
+        $scad_code = $_POST['scad_code'] ?? '';
+        if ($scad_code) {
+            $image_b64 = render_scad($scad_code);
+            echo json_encode(['image' => $image_b64]);
+        } else {
+            echo json_encode(['error' => 'No SCAD code provided']);
+        }
     } else {
         echo json_encode(['error' => 'Unknown action']);
     }
+    exit;
+}
+
+// Handle AJAX GET requests
+if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
+    header('Content-Type: application/json');
+    $project_id = (int) ($_GET['project_id'] ?? 0);
+    $iteration_id = (int) ($_GET['iteration_id'] ?? 0);
+
+    $projects = get_projects();
+    $current_project = null;
+    $iterations = [];
+    $current_iteration = null;
+
+    if ($project_id) {
+        $current_project = get_project($project_id);
+        $iterations = get_iterations($project_id);
+        if ($iteration_id) {
+            $current_iteration = get_iteration($iteration_id);
+        } elseif ($iterations) {
+            $current_iteration = $iterations[0]; // Latest
+        }
+    }
+
+    echo json_encode([
+        'projects' => $projects,
+        'current_project' => $current_project,
+        'iterations' => $iterations,
+        'current_iteration' => $current_iteration,
+    ]);
     exit;
 }
 
