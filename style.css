@@ -1,81 +1,100 @@
 body {
     font-family: Arial, sans-serif;
     margin: 20px;
+    background-color: #f5f5f5;
 }
 
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
+h1 {
+    color: #333;
 }
 
-form {
-    float: left;
-    width: 45%;
-    margin-right: 5%;
+#project-section {
+    margin-bottom: 20px;
 }
 
-.results {
-    float: right;
-    width: 50%;
+#project-selector, #project-name {
+    margin-right: 10px;
+    padding: 5px;
 }
 
-textarea {
-    width: 100%;
-    box-sizing: border-box;
-}
-
-button {
-    margin-top: 10px;
-    padding: 10px;
-    background-color: #007bff;
+#new-project-btn {
+    padding: 5px 10px;
+    background-color: #4CAF50;
     color: white;
     border: none;
     cursor: pointer;
 }
 
-button:hover {
-    background-color: #0056b3;
+#new-project-btn:hover {
+    background-color: #45a049;
 }
 
-button:disabled {
-    background-color: #6c757d;
-    cursor: not-allowed;
+#main-content {
+    display: flex;
 }
 
-pre {
-    background-color: #f8f9fa;
+#iterations {
+    width: 200px;
+    margin-right: 20px;
+}
+
+#iteration-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+#iteration-list li {
     padding: 10px;
     border: 1px solid #ddd;
-    overflow-x: auto;
+    margin-bottom: 5px;
+    cursor: pointer;
+    background-color: #fff;
 }
 
-img {
+#iteration-list li.selected {
+    background-color: #e0e0e0;
+}
+
+#iteration-list li:hover {
+    background-color: #f0f0f0;
+}
+
+#form-section {
+    flex: 1;
+}
+
+label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+textarea {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button[type="submit"] {
+    margin-top: 10px;
+    padding: 10px 20px;
+    background-color: #008CBA;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+button[type="submit"]:hover {
+    background-color: #007B9A;
+}
+
+#render-output {
+    margin-top: 20px;
+}
+
+#rendered-image {
     max-width: 100%;
-    height: auto;
-}
-
-#live-updates {
-    max-height: 600px;
-    overflow-y: auto;
     border: 1px solid #ddd;
-    padding: 10px;
-    background-color: #f8f9fa;
-}
-
-#live-updates p {
-    margin: 5px 0;
-}
-
-#live-updates pre {
-    margin: 10px 0;
-}
-
-.sidebar {
-    float: left;
-    width: 30%;
-    margin-right: 2%;
-}
-
-.main {
-    margin-left: 32%;
 }

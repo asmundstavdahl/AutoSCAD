@@ -69,6 +69,17 @@ Model specifications, SCAD code, and rendered images for each project iteration 
 - **Database Errors**: Uses PDO with error handling for database operations.
 - **SSE Errors**: Graceful handling of connection issues with user feedback.
 
+## Troubleshooting
+- Check nginx error logs: `tail -n10 /var/log/nginx/error.log`
+- Check PHP error logs: `tail -n10 /var/log/php8.3-fpm.log` (adjust version as needed)
+- Verify OpenSCAD installation: `which openscad`
+- Test LLM API: `curl -X POST "https://openrouter.ai/api/v1/chat/completions" -H "Authorization: Bearer $OPENROUTER_API_KEY" -d '{"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 10}'`
+- If "OPENROUTER_API_KEY environment variable not set" error occurs, add the API key to PHP-FPM pool config in `/etc/php/8.3/fpm/pool.d/www.conf`:
+  ```
+  env[OPENROUTER_API_KEY] = your_api_key_here
+  ```
+  Then restart PHP-FPM: `systemctl restart php8.3-fpm`
+
 ## Limitations
 - **Max Iterations**: Limited to 3 to prevent infinite loops and resource exhaustion, but this limit should be configurable by adjusting a constant in the PHP code.
 - **No Recursive Modules**: SCAD code generation avoids recursive modules to prevent errors.
