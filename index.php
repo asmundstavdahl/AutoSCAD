@@ -12,6 +12,17 @@ if (isset($_GET['sse']) && $_GET['sse'] === '1') {
     header('Cache-Control: no-cache');
     header('Connection: keep-alive');
 
+    // Helper to send SSE event with proper handling of multi-line data
+    function send_sse_event(string $event, string $data = ''): void
+    {
+        echo "event: {$event}\n";
+        foreach (preg_split('/\R/', $data) as $line) {
+            echo "data: {$line}\n";
+        }
+        echo "\n";
+        flush();
+    }
+
     $project_id = (int) ($_GET['project_id'] ?? 0);
     $spec = sanitize_input($_GET['spec'] ?? '');
     $scad_code = $_GET['scad_code'] ?? null;
@@ -20,13 +31,12 @@ if (isset($_GET['sse']) && $_GET['sse'] === '1') {
     }
 
     if (!$project_id || !$spec) {
-        echo "event: error\ndata: Invalid project or spec\n\n";
+        send_sse_event('error', 'Invalid project or spec');
         exit;
     }
 
     $iteration_id = create_iteration($project_id, $spec, $scad_code);
-    echo "event: iteration_start\ndata: $iteration_id\n\n";
-    flush();
+    send_sse_event('iteration_start', (string) $iteration_id);
 
     $iterations = 0;
     while ($iterations < MAX_ITERATIONS) {
@@ -34,22 +44,22 @@ if (isset($_GET['sse']) && $_GET['sse'] === '1') {
 
         // Get current SCAD
         $iteration = get_iteration($iteration_id);
-        if (!$iteration) break;
+        if (!$iteration)
+            break;
         $current_scad = $iteration['scad_code'];
 
         // Render
         $image_b64 = render_scad($current_scad);
-        echo "event: render\ndata: " . ($image_b64 ?: 'error') . "\n\n";
-        flush();
+        send_sse_event('render', $image_b64 ?: 'error');
 
         // Evaluate
         $eval_prompt = "Spec: {$spec}\n\nSCAD Code:\n{$current_scad}\n\nIs the SCAD code fulfilling the specification? Answer only YES or NO.";
         $eval_response = call_llm($eval_prompt);
         $fulfilled = strtoupper(trim($eval_response ?? '')) === 'YES';
-        echo "event: evaluate\ndata: " . ($fulfilled ? 'yes' : 'no') . "\n\n";
-        flush();
+        send_sse_event('evaluate', $fulfilled ? 'yes' : 'no');
 
-        if ($fulfilled) break;
+        if ($fulfilled)
+            break;
 
         // Plan
         $plan_prompt = "Spec: {$spec}\n\nCurrent SCAD Code:\n{$current_scad}\n\nThe code does not fulfill the spec. Provide a concrete plan as JSON array of steps to modify the SCAD code. Respond with valid JSON only, no markdown.";
@@ -59,8 +69,7 @@ if (isset($_GET['sse']) && $_GET['sse'] === '1') {
         if ($decoded) {
             $plan_response = json_encode($decoded);
         }
-        echo "event: plan\ndata: " . $plan_response . "\n\n";
-        flush();
+        send_sse_event('plan', $plan_response);
 
         // Generate new code
         $gen_prompt = "Spec: {$spec}\n\nCurrent SCAD Code:\n{$current_scad}\n\nPlan: {$plan_response}\n\nWrite a new version of the SCAD code that fulfills the specification. Ensure it is valid SCAD code, no markdown.";
@@ -70,12 +79,13 @@ if (isset($_GET['sse']) && $_GET['sse'] === '1') {
             $pdo = get_db_connection();
             $stmt = $pdo->prepare('UPDATE iterations SET scad_code = ? WHERE id = ?');
             $stmt->execute([$new_scad, $iteration_id]);
-            echo "event: code_update\ndata: $new_scad\n\n";
-            flush();
+            send_sse_event('code_update', $new_scad);
         }
     }
 
-    echo "event: done\ndata: \n\n";
+    send_sse_event('done', 'foo');
+    sleep(2);
+    send_sse_event('done', 'bar');
     exit;
 }
 
@@ -129,11 +139,13 @@ if ($project_id) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>AutoSCAD</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <h1>AutoSCAD</h1>
 
@@ -157,7 +169,8 @@ if ($project_id) {
             <h2>Iterations</h2>
             <ul id="iteration-list">
                 <?php foreach ($iterations as $iter): ?>
-                    <li data-id="<?= $iter['id'] ?>" class="<?= $iter['id'] == ($current_iteration['id'] ?? 0) ? 'selected' : '' ?>">
+                    <li data-id="<?= $iter['id'] ?>"
+                        class="<?= $iter['id'] == ($current_iteration['id'] ?? 0) ? 'selected' : '' ?>">
                         <?= htmlspecialchars(substr($iter['spec'], 0, 50)) ?>...
                     </li>
                 <?php endforeach; ?>
@@ -167,17 +180,20 @@ if ($project_id) {
         <div id="form-section">
             <form id="scad-form">
                 <label for="spec">Specification:</label>
-                <textarea id="spec" name="spec" rows="5"><?= htmlspecialchars($current_iteration['spec'] ?? '') ?></textarea>
+                <textarea id="spec" name="spec"
+                    rows="5"><?= htmlspecialchars($current_iteration['spec'] ?? '') ?></textarea>
 
                 <label for="scad_code">SCAD Code:</label>
-                <textarea id="scad_code" name="scad_code" rows="10"><?= htmlspecialchars($current_iteration['scad_code'] ?? '') ?></textarea>
+                <textarea id="scad_code" name="scad_code"
+                    rows="10"><?= htmlspecialchars($current_iteration['scad_code'] ?? '') ?></textarea>
 
                 <button type="submit">Generate</button>
             </form>
 
             <div id="render-output">
                 <?php if ($current_iteration && $current_iteration['scad_code']): ?>
-                    <img id="rendered-image" src="data:image/png;base64,<?= render_scad($current_iteration['scad_code']) ?>" alt="Rendered SCAD">
+                    <img id="rendered-image" src="data:image/png;base64,<?= render_scad($current_iteration['scad_code']) ?>"
+                        alt="Rendered SCAD">
                 <?php endif; ?>
             </div>
         </div>
@@ -185,4 +201,5 @@ if ($project_id) {
 
     <script src="script.js"></script>
 </body>
+
 </html>

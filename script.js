@@ -1,5 +1,5 @@
 // Project selector
-document.getElementById('project-selector').addEventListener('change', function() {
+document.getElementById('project-selector').addEventListener('change', function () {
     const projectId = this.value;
     if (projectId) {
         window.location.href = `?project_id=${projectId}`;
@@ -7,22 +7,22 @@ document.getElementById('project-selector').addEventListener('change', function(
 });
 
 // New project button
-document.getElementById('new-project-btn').addEventListener('click', function() {
+document.getElementById('new-project-btn').addEventListener('click', function () {
     fetch('', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'action=create_project'
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.id) {
-            window.location.href = `?project_id=${data.id}`;
-        }
-    });
+        .then(response => response.json())
+        .then(data => {
+            if (data.id) {
+                window.location.href = `?project_id=${data.id}`;
+            }
+        });
 });
 
 // Project name update
-document.getElementById('project-name').addEventListener('change', function() {
+document.getElementById('project-name').addEventListener('change', function () {
     const projectId = new URLSearchParams(window.location.search).get('project_id');
     const name = this.value;
     fetch('', {
@@ -33,7 +33,7 @@ document.getElementById('project-name').addEventListener('change', function() {
 });
 
 // Iteration list clicks
-document.getElementById('iteration-list').addEventListener('click', function(e) {
+document.getElementById('iteration-list').addEventListener('click', function (e) {
     if (e.target.tagName === 'LI') {
         const iterationId = e.target.dataset.id;
         const projectId = new URLSearchParams(window.location.search).get('project_id');
@@ -42,7 +42,7 @@ document.getElementById('iteration-list').addEventListener('click', function(e) 
 });
 
 // Form submit
-document.getElementById('scad-form').addEventListener('submit', function(e) {
+document.getElementById('scad-form').addEventListener('submit', function (e) {
     e.preventDefault();
     const formData = new FormData(this);
     formData.append('action', 'generate');
@@ -64,8 +64,9 @@ document.getElementById('scad-form').addEventListener('submit', function(e) {
     // Start SSE
     const eventSource = new EventSource(`?sse=1&project_id=${projectId}&spec=${encodeURIComponent(spec)}&scad_code=${encodeURIComponent(scadCode)}`);
     let currentIterationId;
+    let eventSourceFinished = false;
 
-    eventSource.onmessage = function(event) {
+    eventSource.onmessage = function (event) {
         const data = event.data;
         if (event.type === 'iteration_start') {
             currentIterationId = data;
@@ -85,6 +86,7 @@ document.getElementById('scad-form').addEventListener('submit', function(e) {
         } else if (event.type === 'code_update') {
             document.getElementById('scad_code').value = data;
         } else if (event.type === 'done') {
+            eventSource.onerror = null;
             eventSource.close();
             if (currentIterationId) {
                 window.location.href = `?project_id=${projectId}&iteration_id=${currentIterationId}`;
@@ -95,8 +97,8 @@ document.getElementById('scad-form').addEventListener('submit', function(e) {
         }
     };
 
-    eventSource.onerror = function() {
-        console.error('SSE error');
+    eventSource.onerror = function (es, e) {
+        console.error('SSE error', e, es);
         alert('Connection error occurred. This might be due to network issues, server problems, or the generation taking too long. Please try again or check your internet connection.');
         eventSource.close();
     };
