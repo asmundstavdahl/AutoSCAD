@@ -33,8 +33,8 @@ Model specifications, SCAD code, and rendered images for each project iteration 
 
 ## Architecture
 - **Backend**: PHP scripts (`index.php`, `common.php`) handle web requests, database interactions, LLM calls, and SCAD generation.
-- **Frontend**: HTML/CSS/JavaScript web interface with forms for input and real-time updates via Server-Sent Events (SSE).
-- **Generation Loop**: Iterative process involving rendering, evaluation, planning, and code generation until spec is fulfilled or max iterations reached.
+- **Frontend**: HTML/CSS/JavaScript web interface with AJAX for form submissions and real-time updates via Server-Sent Events (SSE).
+- **Generation Loop**: Iterative process involving rendering, evaluation, planning, and code generation until spec is fulfilled or max iterations reached, with no full page reloads during iterations.
 - **Session Management**: Prefer to not use session data – use URL GET parameters instead.
 
 ## Supported Usage Patterns
@@ -58,7 +58,7 @@ Model specifications, SCAD code, and rendered images for each project iteration 
 ### Web Interface
 - **Project Management:** Users can create new projects or select existing ones from a dropdown selector. A "New Project" button creates a project with a name based on the current date and time in ISO format. Above the spec and SCAD text areas, a project name field allows editing the current project's name; changes update on "onchange" and refresh the project selector.
 - **Iteration Navigation:** A list of the current project's iterations, sorted by most recent at the top, is displayed on the left side of the page. Iterations are selectable to switch to that iteration. When a new iteration is started, it is sent via Server-Sent Events (SSE) and appears in the iteration selector. When SCAD code is updated or images are rendered, they are sent via SSE and updated in the web page.
-- **Real-time Updates:** Uses SSE to stream progress, including iteration starts, renders, evaluations, plans, and final results.
+- **Real-time Updates:** Uses AJAX for form submissions and SSE to stream progress, including iteration starts, renders, evaluations, plans, and final results, with no full page reloads during iterations.
 - **Input Validation:** Client-side and server-side checks for empty specs, length limits, and sanitization.
 
 ## Error Handling
