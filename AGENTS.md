@@ -1,6 +1,7 @@
 # AGENTS.md
 
 ## Code Style Guidelines
+
 - Variables and functions: snake_case (e.g., $scad_code, call_llm())
 - Indentation: 4 spaces, no tabs
 - Comments: Use // for single-line comments
@@ -17,5 +18,7 @@
 
 - avoid 3rd party packages
 - prefer functions and built-in data types over classes
-- if classes are deemed largely beneficial sometimes, only use pure data classes (no methods!)
+- if classes are deemed, use pure data classes only (no methods!)
 - zero build steps is a design requirement
+- keep functions pure
+- use parameters over global variables and constants
