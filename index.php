@@ -89,10 +89,10 @@ function sse() {
     header('Cache-Control: no-cache');
     header('Connection: keep-alive');
     
-    // Get parameters
+    // Get parameters from GET since SSE uses GET requests
     $project_id = $_GET['project_id'];
-    $spec = $_POST['spec'] ?? '';
-    $scad_code = $_POST['scad_code'] ?? '';
+    $spec = $_GET['spec'] ?? '';
+    $scad_code = $_GET['scad_code'] ?? '';
     
     // Validate inputs
     if (empty($spec)) {
@@ -399,7 +399,11 @@ function show_interface() {
                 eventSource.close();
             }
             
-            eventSource = new EventSource('?action=sse&project_id=' + currentProjectId);
+            // Pass spec and scad_code as GET parameters
+            const sseUrl = '?action=sse&project_id=' + currentProjectId + 
+                      '&spec=' + encodeURIComponent(spec) + 
+                      '&scad_code=' + encodeURIComponent(scadCode);
+            eventSource = new EventSource(sseUrl);
             eventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 console.log(data);
