@@ -122,10 +122,60 @@ function sse() {
     // Start generation loop
     $max_iterations = 3;
     for ($i = 0; $i < $max_iterations; $i++) {
-        // Render current SCAD code from 6 directions
-        $render_result = render_scad($scad_code);
+        // Try to render the SCAD code, with up to 3 attempts to fix syntax errors
+        $render_attempts = 0;
+        $max_render_attempts = 3;
+        $render_result = null;
+        
+        while ($render_attempts < $max_render_attempts) {
+            $render_result = render_scad($scad_code);
+            if (!isset($render_result['error'])) {
+                break;
+            }
+            
+            $render_attempts++;
+            send_sse_message(['render_error' => $render_result['error'], 'attempt' => $render_attempts]);
+            
+            if ($render_attempts >= $max_render_attempts) {
+                send_sse_message(['error' => 'Failed to fix SCAD code after ' . $max_render_attempts . ' attempts']);
+                break 2; // Break out of both loops
+            }
+            
+            // Ask LLM to fix the SCAD code based on the error
+            $fix_messages = [
+                [
+                    'role' => 'system',
+                    'content' => 'You are an expert in OpenSCAD programming. Fix the provided SCAD code based on the rendering error. Ensure the code is valid OpenSCAD syntax. Respond with only the fixed SCAD code.'
+                ],
+                [
+                    'role' => 'user',
+                    'content' => "SCAD Code:\n```openscad\n$scad_code\n```\n\nRendering Error:\n" . $render_result['error'] . "\n\nFix the SCAD code:"
+                ]
+            ];
+            
+            $fix_result = call_llm($fix_messages);
+            if (isset($fix_result['error'])) {
+                send_sse_message(['error' => 'Failed to fix SCAD code: ' . $fix_result['error']]);
+                break 2;
+            }
+            
+            // Update SCAD code with the fix
+            $fixed_scad_code = trim($fix_result['content']);
+            // Clean up markdown code blocks if present
+            $fixed_scad_code = preg_replace('/^```(?:openscad)?\s*/', '', $fixed_scad_code);
+            $fixed_scad_code = preg_replace('/\s*```$/', '', $fixed_scad_code);
+            
+            send_sse_message(['fixed_scad_code' => $fixed_scad_code]);
+            
+            // Update the iteration with fixed SCAD code
+            $stmt = $db->prepare("UPDATE iterations SET scad_code = ? WHERE id = ?");
+            $stmt->execute([$fixed_scad_code, $iteration_id]);
+            
+            $scad_code = $fixed_scad_code;
+        }
+        
+        // If we couldn't render after max attempts, break
         if (isset($render_result['error'])) {
-            send_sse_message(['error' => $render_result['error']]);
             break;
         }
         
@@ -658,6 +708,12 @@ function show_interface() {
                     currentIterationId = data.iteration_id;
                     addStatusMessage('Started new iteration ' + data.iteration_id, 'info');
                     document.getElementById('progress-fill').style.width = '25%';
+                } else if (data.render_error) {
+                    addStatusMessage(`Rendering error (attempt ${data.attempt}/3): ${data.render_error}`, 'error');
+                    document.getElementById('progress-fill').style.width = '40%';
+                } else if (data.fixed_scad_code) {
+                    document.getElementById('scad-code').value = data.fixed_scad_code;
+                    addStatusMessage('Fixed SCAD code based on rendering error', 'info');
                 } else if (data.render_complete) {
                     addStatusMessage('Rendered 3D model from 6 directions', 'info');
                     const previewContainer = document.querySelector('.preview-container');
