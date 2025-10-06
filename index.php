@@ -198,12 +198,13 @@ function sse() {
             [
                 'role' => 'system',
                 'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and the rendered images from 6 different views (front, back, left, right, top, bottom) fulfill the specification. ' .
+                            'Note: Each image includes an axis cross (X=red, Y=green, Z=blue) to help with orientation. ' .
                             'Look at each image carefully to understand the 3D model from all angles. ' .
                             'Respond with a JSON object: {"fulfilled": true/false, "reasoning": "brief explanation"}'
             ],
             [
                 'role' => 'user',
-                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nBelow are 6 images showing the rendered 3D model from different views. Please evaluate if the model fulfills the specification based on these images and the SCAD code."
+                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nBelow are 6 images showing the rendered 3D model from different views. Each view includes an axis cross (X=red, Y=green, Z=blue) for orientation reference. Please evaluate if the model fulfills the specification based on these images and the SCAD code."
             ]
         ];
         
