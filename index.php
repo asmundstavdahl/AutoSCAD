@@ -131,20 +131,22 @@ function sse() {
         
         send_sse_message(['render_complete' => true, 'images' => $render_result['images']]);
         
-        // Evaluate if the spec is fulfilled
+        // Evaluate if the spec is fulfilled - include the rendered images
         $evaluation_messages = [
             [
                 'role' => 'system',
-                'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and rendered images from 6 different views fulfill the specification. ' .
+                'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and the rendered images from 6 different views (front, back, left, right, top, bottom) fulfill the specification. ' .
+                            'Look at each image carefully to understand the 3D model from all angles. ' .
                             'Respond with a JSON object: {"fulfilled": true/false, "reasoning": "brief explanation"}'
             ],
             [
                 'role' => 'user',
-                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nYou have images from 6 different views (front, back, left, right, top, bottom) to evaluate the 3D model.\n\nIs the specification fulfilled? Answer with JSON only."
+                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nBelow are 6 images showing the rendered 3D model from different views. Please evaluate if the model fulfills the specification based on these images and the SCAD code."
             ]
         ];
         
-        $evaluation_result = call_llm($evaluation_messages);
+        // Pass the rendered images to the LLM
+        $evaluation_result = call_llm($evaluation_messages, $render_result['images']);
         if (isset($evaluation_result['error'])) {
             send_sse_message(['error' => 'Evaluation failed: ' . $evaluation_result['error']]);
             break;
