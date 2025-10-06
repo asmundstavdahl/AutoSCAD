@@ -141,11 +141,23 @@ function sse() {
                 break 2; // Break out of both loops
             }
             
+            // Read the OpenSCAD reference
+            $openscad_reference = @file_get_contents('openscad_llms_comprehensive.txt');
+            if ($openscad_reference === false) {
+                $openscad_reference = "OpenSCAD reference file not found. Please use your knowledge of OpenSCAD to fix the code.";
+            } else {
+                // Truncate if too long to avoid token limits
+                if (strlen($openscad_reference) > 8000) {
+                    $openscad_reference = substr($openscad_reference, 0, 8000) . "\n\n[Reference truncated due to length]";
+                }
+            }
+            
             // Ask LLM to fix the SCAD code based on the error
             $fix_messages = [
                 [
                     'role' => 'system',
-                    'content' => 'You are an expert in OpenSCAD programming. Fix the provided SCAD code based on the rendering error. Ensure the code is valid OpenSCAD syntax. Respond with only the fixed SCAD code.'
+                    'content' => 'You are an expert in OpenSCAD programming. Use the following comprehensive OpenSCAD reference to fix the provided SCAD code based on the rendering error. Ensure the code is valid OpenSCAD syntax. Respond with only the fixed SCAD code.' . 
+                                "\n\nOpenSCAD Reference:\n" . $openscad_reference
                 ],
                 [
                     'role' => 'user',
@@ -246,12 +258,24 @@ function sse() {
         $plan_content = $plan_result['content'];
         send_sse_message(['plan' => $plan_content]);
         
+        // Read the OpenSCAD reference
+        $openscad_reference = @file_get_contents('openscad_llms_comprehensive.txt');
+        if ($openscad_reference === false) {
+            $openscad_reference = "OpenSCAD reference file not found. Please use your knowledge of OpenSCAD to write the code.";
+        } else {
+            // Truncate if too long to avoid token limits
+            if (strlen($openscad_reference) > 8000) {
+                $openscad_reference = substr($openscad_reference, 0, 8000) . "\n\n[Reference truncated due to length]";
+            }
+        }
+        
         // Generate new SCAD code
         $generate_messages = [
             [
                 'role' => 'system',
-                'content' => 'You are an expert in OpenSCAD programmer. Write valid SCAD code based on the specification and plan. ' .
-                            'Clean any markdown formatting and ensure the code is valid. Respond with only the SCAD code.'
+                'content' => 'You are an expert in OpenSCAD programmer. Use the following comprehensive OpenSCAD reference to write valid SCAD code based on the specification and plan. ' .
+                            'Clean any markdown formatting and ensure the code is valid. Respond with only the SCAD code.' .
+                            "\n\nOpenSCAD Reference:\n" . $openscad_reference
             ],
             [
                 'role' => 'user',
