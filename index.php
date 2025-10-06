@@ -197,14 +197,14 @@ function sse() {
         $evaluation_messages = [
             [
                 'role' => 'system',
-                'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and the rendered images from 6 different views (front, back, left, right, top, bottom) fulfill the specification. ' .
+                'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and the rendered images from 7 different views (default isometric, front, back, left, right, top, bottom) fulfill the specification. ' .
                             'Note: Each image includes an axis cross (X=red, Y=green, Z=blue) to help with orientation. ' .
                             'Look at each image carefully to understand the 3D model from all angles. ' .
                             'Respond with a JSON object: {"fulfilled": true/false, "reasoning": "brief explanation"}'
             ],
             [
                 'role' => 'user',
-                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nBelow are 6 images showing the rendered 3D model from different views. Each view includes an axis cross (X=red, Y=green, Z=blue) for orientation reference. Please evaluate if the model fulfills the specification based on these images and the SCAD code."
+                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nBelow are 7 images showing the rendered 3D model from different views, including a default isometric view. Each view includes an axis cross (X=red, Y=green, Z=blue) for orientation reference. Please evaluate if the model fulfills the specification based on these images and the SCAD code."
             ]
         ];
         
@@ -555,7 +555,7 @@ function show_interface() {
             </div>
             
             <div class="card">
-                <h2>3D Preview (6 Views)</h2>
+                <h2>3D Preview (7 Views)</h2>
                 <div class="preview-container">
                     <div id="no-preview" style="color: var(--text-muted);">
                         No preview available. Generate a model to see it here.
@@ -740,18 +740,19 @@ function show_interface() {
                     document.getElementById('scad-code').value = data.fixed_scad_code;
                     addStatusMessage('Fixed SCAD code based on rendering error', 'info');
                 } else if (data.render_complete) {
-                    addStatusMessage('Rendered 3D model from 6 directions', 'info');
+                    addStatusMessage('Rendered 3D model from 7 angles', 'info');
                     const previewContainer = document.querySelector('.preview-container');
                     previewContainer.innerHTML = '';
                     
-                    // Create a grid for the 6 images
+                    // Create a grid for the 7 images - 4 columns for better layout
                     const grid = document.createElement('div');
                     grid.style.display = 'grid';
-                    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+                    grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
                     grid.style.gap = '10px';
                     grid.style.marginTop = '20px';
                     
                     const viewNames = {
+                        'default': 'Default (Isometric)',
                         'front': 'Front',
                         'back': 'Back', 
                         'left': 'Left',
@@ -760,26 +761,32 @@ function show_interface() {
                         'bottom': 'Bottom'
                     };
                     
-                    for (const [view, imageData] of Object.entries(data.images)) {
-                        const imgWrapper = document.createElement('div');
-                        imgWrapper.style.textAlign = 'center';
-                        
-                        const label = document.createElement('div');
-                        label.textContent = viewNames[view] || view;
-                        label.style.marginBottom = '5px';
-                        label.style.fontWeight = '500';
-                        label.style.color = 'var(--text-color)';
-                        
-                        const img = document.createElement('img');
-                        img.src = 'data:image/png;base64,' + imageData;
-                        img.style.maxWidth = '100%';
-                        img.style.border = '1px solid var(--border-color)';
-                        img.style.borderRadius = '6px';
-                        img.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                        
-                        imgWrapper.appendChild(label);
-                        imgWrapper.appendChild(img);
-                        grid.appendChild(imgWrapper);
+                    // Ensure default view is first
+                    const orderedViews = ['default', 'front', 'back', 'left', 'right', 'top', 'bottom'];
+                    
+                    for (const view of orderedViews) {
+                        if (data.images[view]) {
+                            const imgWrapper = document.createElement('div');
+                            imgWrapper.style.textAlign = 'center';
+                            
+                            const label = document.createElement('div');
+                            label.textContent = viewNames[view] || view;
+                            label.style.marginBottom = '5px';
+                            label.style.fontWeight = '500';
+                            label.style.color = 'var(--text-color)';
+                            label.style.fontSize = '14px';
+                            
+                            const img = document.createElement('img');
+                            img.src = 'data:image/png;base64,' + data.images[view];
+                            img.style.maxWidth = '100%';
+                            img.style.border = '1px solid var(--border-color)';
+                            img.style.borderRadius = '6px';
+                            img.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                            
+                            imgWrapper.appendChild(label);
+                            imgWrapper.appendChild(img);
+                            grid.appendChild(imgWrapper);
+                        }
                     }
                     
                     previewContainer.appendChild(grid);
