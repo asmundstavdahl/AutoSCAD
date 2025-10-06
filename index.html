@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoSCAD - AI-Powered OpenSCAD Generator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        .sidebar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+
+        .sidebar h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .project-selector {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .iterations-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .iteration-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .iteration-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .iteration-item.selected {
+            background-color: #e3f2fd;
+            border-left: 3px solid #3498db;
+        }
+
+        .iteration-info {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
+        .content-area {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .project-name-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        textarea[name="spec"] {
+            height: 120px;
+        }
+
+        textarea[name="scad_code"] {
+            height: 300px;
+        }
+
+        .status-area {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+
+        .status-message {
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .progress {
+            display: none;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #3498db;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .images-area {
+            margin-top: 20px;
+        }
+
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .image-container {
+            text-align: center;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .image-caption {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            border-left-color: #e74c3c;
+        }
+
+        .success {
+            color: #27ae60;
+            background: #f2fdf8;
+            border-left-color: #27ae60;
+        }
+
+        .warning {
+            color: #f39c12;
+            background: #fff8f2;
+            border-left-color: #f39c12;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AutoSCAD</h1>
+            <p>AI-powered OpenSCAD code generator using natural language specifications</p>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <h2>Project Management</h2>
+
+                <select class="project-selector" id="projectSelector">
+                    <option value="">Select a project...</option>
+                </select>
+
+                <button class="btn" onclick="createNewProject()">New Project</button>
+
+                <div class="form-group">
+                    <label for="projectName">Project Name:</label>
+                    <input type="text" class="project-name-input" id="projectName" placeholder="Enter project name">
+                    <button class="btn btn-secondary" onclick="updateProjectName()">Update Name</button>
+                </div>
+
+                <h2>Iterations</h2>
+                <div class="iterations-list" id="iterationsList">
+                    <div class="loading">No project selected</div>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="spec">Specification:</label>
+                        <textarea name="spec" id="spec" placeholder="Describe your 3D model in natural language..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="scad_code">OpenSCAD Code:</label>
+                        <textarea name="scad_code" id="scad_code" placeholder="Leave empty for auto-generation, or provide initial code..."></textarea>
+                    </div>
+                </div>
+
+                <button class="btn" onclick="startGeneration()">Generate SCAD Code</button>
+
+                <div class="status-area hidden" id="statusArea">
+                    <div class="status-message" id="statusMessage">Processing...</div>
+                    <div class="progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="images-area hidden" id="imagesArea">
+                    <h3>Generated Images</h3>
+                    <div class="images-grid" id="imagesGrid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentProjectId = null;
+        let currentIterationId = null;
+        let eventSource = null;
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProjects();
+        });
+
+        // Project management functions
+        async function loadProjects() {
+            try {
+                const response = await fetch('index.php?action=get_projects');
+                const data = await response.json();
+
+                const selector = document.getElementById('projectSelector');
+                selector.innerHTML = '<option value="">Select a project...</option>';
+
+                data.projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = project.name;
+                    selector.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        }
+
+        async function createNewProject() {
+            try {
+                const response = await fetch('index.php?action=create_project', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'name=' + encodeURIComponent(generateProjectName())
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadProjects();
+                    document.getElementById('projectSelector').value = data.project_id;
+                    await loadIterations(data.project_id);
+                    currentProjectId = data.project_id;
+                } else {
+                    alert('Error creating project: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error creating project:', error);
+                alert('Error creating project');
+            }
+        }
+
+        async function updateProjectName() {
+            if (!currentProjectId) return;
+
+            const newName = document.getElementById('projectName').value.trim();
+            if (!newName) {
+                alert('Please enter a project name');
+                return;
+            }
+
+            try {
+                const response = await fetch('index.php?action=update_project', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `project_id=${currentProjectId}&name=${encodeURIComponent(newName)}`
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadProjects();
+                    document.getElementById('projectSelector').value = currentProjectId;
+                    document.getElementById('projectName').value = newName;
+                } else {
+                    alert('Error updating project name: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error updating project name:', error);
+                alert('Error updating project name');
+            }
+        }
+
+        // Project selection handler
+        document.getElementById('projectSelector').addEventListener('change', async function() {
+            const projectId = parseInt(this.value);
+            if (projectId) {
+                currentProjectId = projectId;
+                document.getElementById('projectName').value = this.options[this.selectedIndex].text;
+                await loadIterations(projectId);
+            } else {
+                currentProjectId = null;
+                document.getElementById('iterationsList').innerHTML = '<div class="loading">No project selected</div>';
+            }
+        });
+
+        // Iteration management functions
+        async function loadIterations(projectId) {
+            try {
+                const response = await fetch(`index.php?action=get_iterations&project_id=${projectId}`);
+                const data = await response.json();
+
+                const iterationsList = document.getElementById('iterationsList');
+                iterationsList.innerHTML = '';
+
+                if (data.iterations.length === 0) {
+                    iterationsList.innerHTML = '<div class="loading">No iterations yet</div>';
+                    return;
+                }
+
+                data.iterations.forEach(iteration => {
+                    const item = document.createElement('div');
+                    item.className = 'iteration-item';
+                    item.onclick = () => selectIteration(iteration.id);
+
+                    const date = new Date(iteration.created_at).toLocaleString();
+                    item.innerHTML = `
+                        <div><strong>Iteration ${iteration.id}</strong></div>
+                        <div class="iteration-info">${date}</div>
+                    `;
+
+                    iterationsList.appendChild(item);
+                });
+
+                // Select the latest iteration by default
+                if (data.iterations.length > 0) {
+                    selectIteration(data.iterations[0].id);
+                }
+            } catch (error) {
+                console.error('Error loading iterations:', error);
+            }
+        }
+
+        async function selectIteration(iterationId) {
+            try {
+                // Remove previous selection
+                document.querySelectorAll('.iteration-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+
+                // Add selection to clicked item
+                event.target.classList.add('selected');
+
+                currentIterationId = iterationId;
+
+                // Load iteration data (you would need an API endpoint for this)
+                // For now, we'll just update the UI state
+                document.getElementById('statusArea').classList.add('hidden');
+                document.getElementById('imagesArea').classList.add('hidden');
+
+            } catch (error) {
+                console.error('Error selecting iteration:', error);
+            }
+        }
+
+        // SCAD generation functions
+        async function startGeneration() {
+            if (!currentProjectId) {
+                alert('Please select a project first');
+                return;
+            }
+
+            const spec = document.getElementById('spec').value.trim();
+            const scadCode = document.getElementById('scad_code').value.trim();
+
+            if (!spec) {
+                alert('Please enter a specification');
+                return;
+            }
+
+            // Show status area
+            const statusArea = document.getElementById('statusArea');
+            statusArea.classList.remove('hidden');
+            document.getElementById('statusMessage').textContent = 'Starting generation...';
+
+            try {
+                const response = await fetch('index.php?action=generate_scad', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `project_id=${currentProjectId}&spec=${encodeURIComponent(spec)}&scad_code=${encodeURIComponent(scadCode)}`
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Start listening for Server-Sent Events
+                    startSSE(data.iteration_id);
+                } else {
+                    throw new Error(data.error || 'Failed to start generation');
+                }
+            } catch (error) {
+                console.error('Error starting generation:', error);
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        function startSSE(iterationId) {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource(`index.php?action=sse&project_id=${currentProjectId}&iteration_id=${iterationId}`);
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleSSEMessage(data);
+            };
+
+            eventSource.onerror = function(event) {
+                console.error('SSE error:', event);
+                showStatus('Connection error occurred', 'error');
+            };
+        }
+
+        function handleSSEMessage(data) {
+            switch (data.status) {
+                case 'started':
+                    showStatus('Generation started...', 'info');
+                    break;
+
+                case 'iteration':
+                    showStatus(`Processing iteration ${data.iteration} of ${data.max_iterations}...`, 'info');
+                    break;
+
+                case 'rendered':
+                    showStatus('Rendered current version', 'success');
+                    addImage(data.image_file);
+                    break;
+
+                case 'evaluating':
+                    showStatus(`Evaluation: ${data.result}`, 'info');
+                    break;
+
+                case 'planning':
+                    showStatus('Planning improvements...', 'info');
+                    break;
+
+                case 'new_code':
+                    showStatus('Generated new code version', 'success');
+                    document.getElementById('scad_code').value = data.scad_code;
+                    break;
+
+                case 'complete':
+                    showStatus('Specification fulfilled!', 'success');
+                    eventSource.close();
+                    break;
+
+                case 'max_iterations_reached':
+                    showStatus('Maximum iterations reached', 'warning');
+                    eventSource.close();
+                    break;
+
+                default:
+                    if (data.error) {
+                        showStatus(data.error, 'error');
+                        if (eventSource) {
+                            eventSource.close();
+                        }
+                    }
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusArea = document.getElementById('statusArea');
+            const statusMessage = document.getElementById('statusMessage');
+
+            statusMessage.textContent = message;
+            statusArea.className = `status-area ${type}`;
+
+            // Show progress bar for iterations
+            if (message.includes('iteration')) {
+                document.getElementById('progress').style.display = 'block';
+            }
+        }
+
+        function addImage(imageFile) {
+            const imagesGrid = document.getElementById('imagesGrid');
+            const imagesArea = document.getElementById('imagesArea');
+
+            imagesArea.classList.remove('hidden');
+
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'image-container';
+
+            const img = document.createElement('img');
+            img.src = `autoscad_images_${currentProjectId}/${imageFile}`;
+            img.alt = `Iteration ${imageFile}`;
+
+            const caption = document.createElement('div');
+            caption.className = 'image-caption';
+            caption.textContent = imageFile;
+
+            imageContainer.appendChild(img);
+            imageContainer.appendChild(caption);
+            imagesGrid.appendChild(imageContainer);
+        }
+
+        function generateProjectName() {
+            const now = new Date();
+            return `Project_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html>

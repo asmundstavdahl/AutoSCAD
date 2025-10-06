@@ -1,285 +1,237 @@
 <?php
+
+// Database connection and utility functions for AutoSCAD
+// Follows AGENTS.md coding standards: snake_case, 4 spaces, pure functions
+
 declare(strict_types=1);
 
-// AutoSCAD backend helpers per SPEC.md
+// Database configuration
+const DATABASE_FILE = 'autoscad.db';
+const MAX_ITERATIONS = 3;
+const LLM_MODEL = 'google/gemma-3-27b-it';
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-define('DB_PATH', __DIR__ . '/autoscad.db');
-define('TMP_DIR', __DIR__ . '/tmp');
-define('MAX_ITERATIONS', 3);
-
-// Ensure temporary directory exists
-function ensure_dirs(): void
+// Initialize database connection
+function initialize_database(): PDO
 {
-    if (!is_dir(TMP_DIR)) {
-        mkdir(TMP_DIR, 0777, true);
-    }
-}
-
-// Database connection
-function db_connect(): PDO
-{
-    $dsn = 'sqlite:' . DB_PATH;
-    $pdo = new PDO($dsn);
+    $pdo = new PDO('sqlite:' . DATABASE_FILE);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Create tables if they don't exist
+    $create_projects_table = "
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ";
+
+    $create_iterations_table = "
+        CREATE TABLE IF NOT EXISTS iterations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            spec TEXT NOT NULL,
+            scad_code TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )
+    ";
+
+    $pdo->exec($create_projects_table);
+    $pdo->exec($create_iterations_table);
+
     return $pdo;
 }
 
-// Initialize database schema if missing
-function init_db(): void
+// Project management functions
+function create_project(PDO $pdo, string $name): int
 {
-    ensure_dirs();
-    $pdo = db_connect();
-    // projects table
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )"
-    );
-    // iterations table
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS iterations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER,
-            spec TEXT,
-            scad_code TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(project_id) REFERENCES projects(id)
-        )"
-    );
-}
-
-// Project helpers
-function create_project(string $name): int
-{
-    $pdo = db_connect();
-    init_db();
     $stmt = $pdo->prepare('INSERT INTO projects (name) VALUES (?)');
     $stmt->execute([$name]);
-    return (int) $pdo->lastInsertId();
+    return (int)$pdo->lastInsertId();
 }
 
-function get_projects(): array
+function get_projects(PDO $pdo): array
 {
-    $pdo = db_connect();
-    init_db();
-    $stmt = $pdo->query('SELECT id, name, created_at FROM projects ORDER BY created_at DESC');
+    $stmt = $pdo->query('SELECT * FROM projects ORDER BY created_at DESC');
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function get_project(int $project_id): ?array
+function get_project(PDO $pdo, int $project_id): ?array
 {
-    $pdo = db_connect();
-    init_db();
-    $stmt = $pdo->prepare('SELECT id, name, created_at FROM projects WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT * FROM projects WHERE id = ?');
     $stmt->execute([$project_id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $row ?: null;
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-// Iteration helpers
-function new_iteration(int $project_id, string $spec, string $scad_code): int
+function update_project_name(PDO $pdo, int $project_id, string $name): bool
 {
-    $pdo = db_connect();
-    init_db();
+    $stmt = $pdo->prepare('UPDATE projects SET name = ? WHERE id = ?');
+    return $stmt->execute([$name]);
+}
+
+// Iteration management functions
+function create_iteration(PDO $pdo, int $project_id, string $spec, string $scad_code): int
+{
     $stmt = $pdo->prepare('INSERT INTO iterations (project_id, spec, scad_code) VALUES (?, ?, ?)');
     $stmt->execute([$project_id, $spec, $scad_code]);
-    return (int) $pdo->lastInsertId();
+    return (int)$pdo->lastInsertId();
 }
 
-function get_iterations(int $project_id): array
+function get_iterations(PDO $pdo, int $project_id): array
 {
-    $pdo = db_connect();
-    init_db();
-    $stmt = $pdo->prepare('SELECT id, spec, scad_code, created_at FROM iterations WHERE project_id = ? ORDER BY created_at DESC');
+    $stmt = $pdo->prepare('SELECT * FROM iterations WHERE project_id = ? ORDER BY created_at DESC');
     $stmt->execute([$project_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function get_iteration(int $iteration_id): ?array
+function get_iteration(PDO $pdo, int $iteration_id): ?array
 {
-    $pdo = db_connect();
-    init_db();
-    $stmt = $pdo->prepare('SELECT id, project_id, spec, scad_code, created_at FROM iterations WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT * FROM iterations WHERE id = ?');
     $stmt->execute([$iteration_id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $row ?: null;
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-function update_iteration_scad(int $iteration_id, string $scad_code): void
+// OpenSCAD rendering functions
+function render_scad_to_image(string $scad_code, string $output_file): bool
 {
-    $pdo = db_connect();
-    init_db();
-    $stmt = $pdo->prepare('UPDATE iterations SET scad_code = ? WHERE id = ?');
-    $stmt->execute([$scad_code, $iteration_id]);
+    $temp_file = sys_get_temp_dir() . '/autoscad_' . uniqid() . '.scad';
+
+    // Write SCAD code to temporary file
+    if (file_put_contents($temp_file, $scad_code) === false) {
+        return false;
+    }
+
+    // Render using OpenSCAD
+    $command = sprintf(
+        'openscad -o %s --imgsize=800,600 --camera=0,0,0,0,0,0,200 %s 2>&1',
+        escapeshellarg($output_file),
+        escapeshellarg($temp_file)
+    );
+
+    exec($command, $output, $return_code);
+
+    // Clean up temporary file
+    unlink($temp_file);
+
+    return $return_code === 0;
 }
 
-// SCAD rendering (best-effort, uses OpenSCAD if available, otherwise creates placeholder PNG)
-function render_scad_to_image(string $scad_code, int $iteration_id): string
+function get_rendered_images(int $project_id): array
 {
-    ensure_dirs();
-    $scad_path = TMP_DIR . '/iteration_' . $iteration_id . '.scad';
-    $png_path = TMP_DIR . '/iteration_' . $iteration_id . '.png';
+    $images = [];
+    $image_dir = sys_get_temp_dir() . '/autoscad_images_' . $project_id;
 
-    // write SCAD
-    file_put_contents($scad_path, $scad_code);
-
-    // try openscad
-    $openscad = trim(shell_exec('command -v openscad 2>/dev/null') ?: '');
-    if ($openscad !== '') {
-        $cmd = escapeshellcmd($openscad) . ' -o ' . escapeshellarg($png_path) . ' ' . escapeshellarg($scad_path);
-        $exit = null;
-        $output = [];
-        exec($cmd, $output, $exit);
-        if ($exit === 0 && file_exists($png_path)) {
-            return $png_path;
+    if (is_dir($image_dir)) {
+        $files = scandir($image_dir);
+        foreach ($files as $file) {
+            if (pathinfo($file, PATHINFO_EXTENSION) === 'png') {
+                $images[] = $image_dir . '/' . $file;
+            }
         }
     }
 
-    // fallback: create a tiny placeholder image
-    $im = imagecreatetruecolor(200, 200);
-    $bg = imagecolorallocate($im, 240, 240, 240);
-    $fg = imagecolorallocate($im, 0, 0, 0);
-    imagefill($im, 0, 0, $bg);
-    $text = 'OpenSCAD placeholder';
-    imagestring($im, 3, 10, 90, $text, $fg);
-    imagepng($im, $png_path);
-    imagedestroy($im);
-    return $png_path;
+    return $images;
 }
 
-// LLM integration (optional)
-function llm_chat(array $messages, string $model = 'google/gemma-3-27b-it')
+// LLM API functions
+function call_llm_api(string $prompt, string $api_key): ?string
 {
-    $apiKey = getenv('OPENROUTER_API_KEY');
-    if (!$apiKey) {
-        return ['error' => 'OPENROUTER_API_KEY not set'];
-    }
-    $url = 'https://openrouter.ai/api/v1/chat/completions';
-    $payload = [
-        'model' => $model,
-        'messages' => $messages,
-        'max_tokens' => 800,
+    $data = [
+        'model' => LLM_MODEL,
+        'messages' => [
+            [
+                'role' => 'user',
+                'content' => $prompt
+            ]
+        ],
+        'max_tokens' => 2000
     ];
-    $ch = curl_init($url);
+
+    $ch = curl_init(OPENROUTER_BASE_URL);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . $apiKey,
-        'Content-Type: application/json',
-    ]);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    $res = curl_exec($ch);
-    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $api_key,
+        'HTTP-Referer: ' . ($_SERVER['HTTP_HOST'] ?? 'localhost'),
+        'X-Title: AutoSCAD'
+    ]);
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($http !== 200) {
-        return ['error' => 'LLM API error: ' . $http . ' ' . ($res ?? '')];
+
+    if ($http_code !== 200) {
+        return null;
     }
-    $data = json_decode($res, true);
-    if (!$data) {
-        return ['error' => 'LLM response not valid JSON'];
-    }
-    // try to extract content
-    if (!empty($data['choices'][0]['message']['content'])) {
-        $content = $data['choices'][0]['message']['content'];
-        // try to parse JSON inside content
-        $json_start = strpos($content, '{');
-        if ($json_start !== false) {
-            $maybe = substr($content, $json_start);
-            $decoded = json_decode($maybe, true);
-            if ($decoded !== null) {
-                return $decoded;
-            }
-        }
-        return ['text' => $content];
-    }
-    return ['error' => 'LLM response parsing failed'];
+
+    $result = json_decode($response, true);
+    return $result['choices'][0]['message']['content'] ?? null;
 }
 
-// Plan executor (very naive): apply simple plan steps to SCAD code
-function apply_plan_to_scad(array $plan, string $scad_code): string
+// Validation functions
+function validate_spec(string $spec): array
 {
-    foreach ($plan as $step) {
-        if (!is_array($step))
-            continue;
-        $text = isset($step['text']) ? $step['text'] : (isset($step[0]) ? $step[0] : '');
-        if (stripos($text, 'add cube') !== false || stripos($text, 'cube(') !== false) {
-            // try extract dims
-            if (preg_match('/cube\\s*\\(\\s*\\[?([0-9\\.]+)\\s*,\\s*([0-9\\.]+)\\s*,\\s*([0-9\\.]+)\\]?/', $text, $m)) {
-                $w = $m[1];
-                $h = $m[2];
-                $d = $m[3];
-                $scad_code .= "\ncube([$w, $h, $d]);";
-            } else {
-                $scad_code .= "\ncube([10,10,10]);";
-            }
-        } elseif (stripos($text, 'add cylinder') !== false || stripos($text, 'cylinder') !== false) {
-            if (preg_match('/cylinder\\(.*r\\s*=\\s*([0-9\\.]+).*h\\s*=\\s*([0-9\\.]+)/', $text, $m)) {
-                $r = $m[1];
-                $h = $m[2];
-            } else {
-                $r = 5;
-                $h = 10;
-            }
-            $scad_code .= "\ncylinder(h=$h, r=$r);";
-        } elseif (stripos($text, 'add sphere') !== false || stripos($text, 'sphere') !== false) {
-            if (preg_match('/sphere\\(.*r\\s*=\\s*([0-9\\.]+)/', $text, $m)) {
-                $r = $m[1];
-            } else {
-                $r = 5;
-            }
-            $scad_code .= "\nsphere(r=$r);";
-        } else {
-            // attach as comment for traceability
-            $scad_code .= "\n// plan: $text";
-        }
+    $errors = [];
+
+    if (empty(trim($spec))) {
+        $errors[] = 'Specification cannot be empty';
     }
-    return $scad_code;
+
+    if (strlen($spec) > 10000) {
+        $errors[] = 'Specification is too long (max 10000 characters)';
+    }
+
+    return $errors;
 }
 
-// Generate loop orchestrator
-function run_generation_loop(int $iteration_id, int $max_iterations = MAX_ITERATIONS): void
+function validate_scad_code(string $scad_code): array
 {
-    $iter = get_iteration($iteration_id);
-    if (!$iter)
-        return;
-    $spec = $iter['spec'] ?? '';
-    $scad_code = $iter['scad_code'] ?? '';
+    $errors = [];
 
-    for ($i = 0; $i < $max_iterations; $i++) {
-        // render current SCAD
-        $image_path = render_scad_to_image($scad_code, $iteration_id);
-        // build prompt for LLM
-        $messages = [];
-        $messages[] = ['role' => 'system', 'content' => 'You are AutoSCAD, an AI assistant that iteratively refines OpenSCAD code to fulfill a given natural language specification.'];
-        $messages[] = ['role' => 'user', 'content' => "Spec:\n$spec\n\nCurrent SCAD:\n$scad_code\n\nRendered image: $image_path\n\nProvide a JSON object with keys: fulfill (YES/NO), plan (array of steps, each step as {text: '...'}), updated_scad (optional string with revised SCAD code)."];
-
-        $llm = llm_chat($messages);
-        if (isset($llm['error'])) {
-            // LLM failure; stop loop and expose error in iteration record
-            break;
-        }
-        // if LLM provided structured data, try to use it
-        if (!empty($llm['fulfill']) && (strtoupper((string) $llm['fulfill']) === 'YES' || strtoupper((string) $llm['fulfill']) === 'Y')) {
-            // final fulfill, write updated code if provided
-            if (!empty($llm['updated_scad'])) {
-                $scad_code = $llm['updated_scad'];
-                update_iteration_scad($iteration_id, $scad_code);
-            }
-            break;
-        }
-        // attempt to parse plan and updated_scad
-        $updated = $llm['updated_scad'] ?? null;
-        $plan = $llm['plan'] ?? [];
-        if (is_string($updated) && $updated !== '') {
-            $scad_code = $updated;
-            update_iteration_scad($iteration_id, $scad_code);
-        } elseif (is_array($plan) && !empty($plan)) {
-            $scad_code = apply_plan_to_scad($plan, $scad_code);
-            update_iteration_scad($iteration_id, $scad_code);
-        }
-        // continue to next iteration if not fulfilled
+    if (empty(trim($scad_code))) {
+        $errors[] = 'SCAD code cannot be empty';
     }
+
+    // Check for recursive modules (basic check)
+    if (preg_match('/module\s+\w+\s*\([^)]*\w+\s*\)\s*{[^}]*\w+\s*\([^)]*\w+\s*\)/', $scad_code)) {
+        $errors[] = 'Recursive modules are not supported';
+    }
+
+    return $errors;
 }
-?>
+
+// Utility functions
+function generate_project_name(): string
+{
+    return 'Project_' . date('Y-m-d_H-i-s');
+}
+
+function sanitize_filename(string $filename): string
+{
+    return preg_replace('/[^a-zA-Z0-9\-_.]/', '_', $filename);
+}
+
+function get_api_key(): ?string
+{
+    return getenv('OPENROUTER_API_KEY') ?: null;
+}
+
+function check_dependencies(): array
+{
+    $errors = [];
+
+    // Check OpenSCAD
+    if (empty(shell_exec('which openscad'))) {
+        $errors[] = 'OpenSCAD is not installed or not in PATH';
+    }
+
+    // Check API key
+    if (!get_api_key()) {
+        $errors[] = 'OPENROUTER_API_KEY environment variable not set';
+    }
+
+    return $errors;
+}
