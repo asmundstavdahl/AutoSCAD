@@ -122,25 +122,25 @@ function sse() {
     // Start generation loop
     $max_iterations = 3;
     for ($i = 0; $i < $max_iterations; $i++) {
-        // Render current SCAD code
+        // Render current SCAD code from 6 directions
         $render_result = render_scad($scad_code);
         if (isset($render_result['error'])) {
             send_sse_message(['error' => $render_result['error']]);
             break;
         }
         
-        send_sse_message(['render_complete' => true, 'image' => $render_result['image']]);
+        send_sse_message(['render_complete' => true, 'images' => $render_result['images']]);
         
         // Evaluate if the spec is fulfilled
         $evaluation_messages = [
             [
                 'role' => 'system',
-                'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and rendered image fulfill the specification. ' .
+                'content' => 'You are an expert in OpenSCAD and 3D modeling. Evaluate if the provided SCAD code and rendered images from 6 different views fulfill the specification. ' .
                             'Respond with a JSON object: {"fulfilled": true/false, "reasoning": "brief explanation"}'
             ],
             [
                 'role' => 'user',
-                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nIs the specification fulfilled? Answer with JSON only."
+                'content' => "Specification: $spec\n\nSCAD Code:\n```openscad\n$scad_code\n```\n\nYou have images from 6 different views (front, back, left, right, top, bottom) to evaluate the 3D model.\n\nIs the specification fulfilled? Answer with JSON only."
             ]
         ];
         
@@ -478,9 +478,8 @@ function show_interface() {
             </div>
             
             <div class="card">
-                <h2>3D Preview</h2>
+                <h2>3D Preview (6 Views)</h2>
                 <div class="preview-container">
-                    <img id="rendered-image" src="" style="display: none;">
                     <div id="no-preview" style="color: var(--text-muted);">
                         No preview available. Generate a model to see it here.
                     </div>
@@ -658,9 +657,49 @@ function show_interface() {
                     addStatusMessage('Started new iteration ' + data.iteration_id, 'info');
                     document.getElementById('progress-fill').style.width = '25%';
                 } else if (data.render_complete) {
-                    addStatusMessage('Rendered 3D model', 'info');
-                    document.getElementById('rendered-image').src = 'data:image/png;base64,' + data.image;
-                    document.getElementById('rendered-image').style.display = 'block';
+                    addStatusMessage('Rendered 3D model from 6 directions', 'info');
+                    const previewContainer = document.querySelector('.preview-container');
+                    previewContainer.innerHTML = '';
+                    
+                    // Create a grid for the 6 images
+                    const grid = document.createElement('div');
+                    grid.style.display = 'grid';
+                    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+                    grid.style.gap = '10px';
+                    grid.style.marginTop = '20px';
+                    
+                    const viewNames = {
+                        'front': 'Front',
+                        'back': 'Back', 
+                        'left': 'Left',
+                        'right': 'Right',
+                        'top': 'Top',
+                        'bottom': 'Bottom'
+                    };
+                    
+                    for (const [view, imageData] of Object.entries(data.images)) {
+                        const imgWrapper = document.createElement('div');
+                        imgWrapper.style.textAlign = 'center';
+                        
+                        const label = document.createElement('div');
+                        label.textContent = viewNames[view] || view;
+                        label.style.marginBottom = '5px';
+                        label.style.fontWeight = '500';
+                        label.style.color = 'var(--text-color)';
+                        
+                        const img = document.createElement('img');
+                        img.src = 'data:image/png;base64,' + imageData;
+                        img.style.maxWidth = '100%';
+                        img.style.border = '1px solid var(--border-color)';
+                        img.style.borderRadius = '6px';
+                        img.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                        
+                        imgWrapper.appendChild(label);
+                        imgWrapper.appendChild(img);
+                        grid.appendChild(imgWrapper);
+                    }
+                    
+                    previewContainer.appendChild(grid);
                     document.getElementById('no-preview').style.display = 'none';
                     document.getElementById('progress-fill').style.width = '50%';
                 } else if (data.evaluation) {
@@ -719,8 +758,8 @@ function show_interface() {
         }
         
         function hidePreview() {
-            document.getElementById('rendered-image').style.display = 'none';
-            document.getElementById('no-preview').style.display = 'block';
+            const previewContainer = document.querySelector('.preview-container');
+            previewContainer.innerHTML = '<div id="no-preview" style="color: var(--text-muted);">No preview available. Generate a model to see it here.</div>';
         }
     </script>
 </body>

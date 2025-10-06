@@ -39,35 +39,67 @@ function get_api_key() {
     return getenv('OPENROUTER_API_KEY');
 }
 
-// Render SCAD code to PNG
+// Render SCAD code to PNG from 6 directions
 function render_scad($scad_code) {
     $temp_dir = sys_get_temp_dir();
     $scad_file = tempnam($temp_dir, 'autoscad_') . '.scad';
-    $png_file = tempnam($temp_dir, 'autoscad_') . '.png';
-    
     file_put_contents($scad_file, $scad_code);
     
-    // Run OpenSCAD to render
-    $command = "openscad -o " . escapeshellarg($png_file) . " " . escapeshellarg($scad_file);
-    exec($command . " 2>&1", $output, $return_code);
+    // Define the 6 camera views
+    $views = [
+        'front' => '--camera=0,0,0,55,0,25,500',
+        'back' => '--camera=0,0,0,235,0,25,500',
+        'left' => '--camera=0,0,0,145,0,25,500',
+        'right' => '--camera=0,0,0,325,0,25,500',
+        'top' => '--camera=0,0,0,0,90,500',
+        'bottom' => '--camera=0,0,0,0,-90,500'
+    ];
     
-    if ($return_code !== 0) {
-        unlink($scad_file);
-        return ['error' => 'OpenSCAD rendering failed: ' . implode("\n", $output)];
+    $images = [];
+    
+    foreach ($views as $view_name => $camera_params) {
+        $png_file = tempnam($temp_dir, "autoscad_{$view_name}_") . '.png';
+        
+        // Run OpenSCAD to render with specific camera parameters
+        $command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " " . escapeshellarg($scad_file);
+        exec($command . " 2>&1", $output, $return_code);
+        
+        if ($return_code !== 0) {
+            // Clean up on error
+            unlink($scad_file);
+            foreach ($images as $temp_png_file) {
+                if (file_exists($temp_png_file)) {
+                    unlink($temp_png_file);
+                }
+            }
+            return ['error' => "OpenSCAD rendering failed for $view_name view: " . implode("\n", $output)];
+        }
+        
+        if (!file_exists($png_file)) {
+            // Clean up on error
+            unlink($scad_file);
+            foreach ($images as $temp_png_file) {
+                if (file_exists($temp_png_file)) {
+                    unlink($temp_png_file);
+                }
+            }
+            return ['error' => "Rendered image not found for $view_name view"];
+        }
+        
+        $images[$view_name] = [
+            'data' => base64_encode(file_get_contents($png_file)),
+            'file' => $png_file
+        ];
     }
-    
-    if (!file_exists($png_file)) {
-        unlink($scad_file);
-        return ['error' => 'Rendered image not found'];
-    }
-    
-    $image_data = base64_encode(file_get_contents($png_file));
     
     // Clean up
     unlink($scad_file);
-    unlink($png_file);
+    foreach ($images as $view_name => $image_info) {
+        unlink($image_info['file']);
+        $images[$view_name] = $image_info['data'];
+    }
     
-    return ['image' => $image_data];
+    return ['images' => $images];
 }
 
 // Call LLM via OpenRouter
