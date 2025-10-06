@@ -382,6 +382,11 @@ function show_interface() {
             border-radius: 6px;
             margin: 10px 0;
             font-size: 14px;
+            transition: opacity 0.5s ease;
+        }
+        
+        .status-message.fading {
+            opacity: 0;
         }
         
         .status-info {
@@ -695,6 +700,18 @@ function show_interface() {
             messageDiv.textContent = message;
             statusDiv.appendChild(messageDiv);
             statusDiv.scrollTop = statusDiv.scrollHeight;
+            
+            // Remove the message after 5 seconds with fade out
+            setTimeout(() => {
+                if (messageDiv.parentNode === statusDiv) {
+                    messageDiv.classList.add('fading');
+                    setTimeout(() => {
+                        if (messageDiv.parentNode === statusDiv) {
+                            statusDiv.removeChild(messageDiv);
+                        }
+                    }, 500);
+                }
+            }, 5000);
         }
         
         function clearStatusMessages() {
