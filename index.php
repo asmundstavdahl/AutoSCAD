@@ -32,6 +32,7 @@ switch ($action) {
 }
 
 function create_project() {
+    header('Content-Type: application/json');
     $db = get_db();
     $name = $_POST['name'] ?? 'Project ' . date('Y-m-d H:i:s');
     
@@ -44,6 +45,7 @@ function create_project() {
 }
 
 function get_projects() {
+    header('Content-Type: application/json');
     $db = get_db();
     $stmt = $db->query("SELECT * FROM projects ORDER BY created_at DESC");
     $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -52,6 +54,7 @@ function get_projects() {
 }
 
 function update_project_name() {
+    header('Content-Type: application/json');
     $db = get_db();
     $project_id = $_POST['project_id'];
     $name = $_POST['name'];
@@ -63,6 +66,7 @@ function update_project_name() {
 }
 
 function get_iterations() {
+    header('Content-Type: application/json');
     $db = get_db();
     $project_id = $_GET['project_id'];
     
@@ -74,6 +78,7 @@ function get_iterations() {
 }
 
 function generate() {
+    header('Content-Type: application/json');
     // This would be a long-running process, so we'll use SSE to stream updates
     // For now, just return success and the actual processing will happen via SSE
     echo json_encode(['success' => true]);

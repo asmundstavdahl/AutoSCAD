@@ -1,6 +1,4 @@
 <?php
-header('Content-Type: application/json');
-
 // Database setup
 function get_db() {
     $db = new PDO('sqlite:autoscad.db');
