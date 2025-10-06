@@ -45,14 +45,15 @@ function render_scad($scad_code) {
     $scad_file = tempnam($temp_dir, 'autoscad_') . '.scad';
     file_put_contents($scad_file, $scad_code);
     
-    // Define the 6 camera views
+    // Define the 6 camera views using Euler angles in degrees
+    // The camera looks towards the origin from the specified angles
     $views = [
-        'front' => '--camera=0,0,0,55,0,25,500',
-        'back' => '--camera=0,0,0,235,0,25,500',
-        'left' => '--camera=0,0,0,145,0,25,500',
-        'right' => '--camera=0,0,0,325,0,25,500',
-        'top' => '--camera=0,0,0,0,90,500',
-        'bottom' => '--camera=0,0,0,0,-90,500'
+        'front' => '--camera=0,0,10,0,0,0,50',
+        'back' => '--camera=0,0,10,0,180,0,50',
+        'left' => '--camera=0,0,10,0,90,0,50',
+        'right' => '--camera=0,0,10,0,270,0,50',
+        'top' => '--camera=0,0,10,90,0,0,50',
+        'bottom' => '--camera=0,0,10,270,0,0,50'
     ];
     
     $images = [];
@@ -60,30 +61,32 @@ function render_scad($scad_code) {
     foreach ($views as $view_name => $camera_params) {
         $png_file = tempnam($temp_dir, "autoscad_{$view_name}_") . '.png';
         
-        // Run OpenSCAD to render with specific camera parameters
-        $command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " " . escapeshellarg($scad_file);
+        // Run OpenSCAD to render with specific camera parameters, --viewall and --autocenter
+        $command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " --viewall --autocenter " . escapeshellarg($scad_file);
         exec($command . " 2>&1", $output, $return_code);
         
-        if ($return_code !== 0) {
+        // Check if the file was created and has content
+        if ($return_code !== 0 || !file_exists($png_file) || filesize($png_file) === 0) {
             // Clean up on error
             unlink($scad_file);
-            foreach ($images as $temp_png_file) {
-                if (file_exists($temp_png_file)) {
-                    unlink($temp_png_file);
+            foreach ($images as $temp_png_info) {
+                if (file_exists($temp_png_info['file'])) {
+                    unlink($temp_png_info['file']);
                 }
             }
-            return ['error' => "OpenSCAD rendering failed for $view_name view: " . implode("\n", $output)];
-        }
-        
-        if (!file_exists($png_file)) {
-            // Clean up on error
-            unlink($scad_file);
-            foreach ($images as $temp_png_file) {
-                if (file_exists($temp_png_file)) {
-                    unlink($temp_png_file);
+            $error_msg = "OpenSCAD rendering failed for $view_name view: " . implode("\n", $output);
+            if (file_exists($png_file)) {
+                if (filesize($png_file) === 0) {
+                    $error_msg .= " (File exists but is empty)";
+                } else {
+                    // Check if it's a valid PNG file
+                    $image_info = getimagesize($png_file);
+                    if ($image_info === false) {
+                        $error_msg .= " (File is not a valid image)";
+                    }
                 }
             }
-            return ['error' => "Rendered image not found for $view_name view"];
+            return ['error' => $error_msg];
         }
         
         $images[$view_name] = [
