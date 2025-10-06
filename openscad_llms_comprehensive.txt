@@ -1,0 +1,279 @@
+# LLMS: OpenSCAD Comprehensive Reference for Agents
+# Sources:
+# - OpenSCAD Language Reference (Wikibooks). Source used to compile language, functions and examples.
+# - OpenSCAD User Manual (Print version) (Wikibooks).
+# This document is cleaned of wiki markup and metadata, and contains concise working examples.
+# Use this as a context file for an OpenSCAD agent. Examples are minimal and functional.
+
+--- USAGE GUIDELINES FOR AGENT ---
+- Always generate valid OpenSCAD syntax.
+- Prefer explicit parameter names for readability (e.g., cube(size=..., center=true)).
+- Favor deterministic constructs; avoid randomization unless requested (rands()).
+- Keep units implicit (OpenSCAD is unitless) but document expected units in comments (e.g., // mm).
+- When producing 3D geometry, ensure non-zero dimensions and consistent winding for polyhedra faces.
+- For boolean operations, ensure children shapes intersect properly and avoid coplanar face degeneracy.
+- Use render() when boolean results require accurate mesh before export.
+- For performance: avoid very high $fn/$fa/$fs unless required; use approximations in preview.
+- For parametrized modules, validate inputs (assert()) and clamp values to safe ranges.
+
+--- SYNTAX & BASIC CONCEPTS ---
+Comments:
+  // single line
+  /* multi-line */
+
+Statements end with newline or semicolon. Whitespace is insignificant except inside strings.
+
+Data types:
+- Number (floating point, IEEE 64)
+- Boolean (true/false)
+- String (double-quoted; escape sequences supported)
+- Vector (ordered list: [a, b, c])
+- Range ([start:end] or [start:step:end])
+- Object (map-like return from some built-ins)
+- undef (undefined literal)
+
+Variables and assignment:
+  name = expression;
+- Variables are immutable in a scope after assignment (functional style).
+- Scopes created by { ... }, modules, functions, and for-loop iterations.
+- Use let() or assign() for scoped temporary values.
+
+Special variables:
+  $fn (fixed number of fragments), $fa (min angle), $fs (min size), $t (time), $preview, $children, $parent_modules, etc.
+- Use $fn/$fa/$fs to control mesh smoothness.
+- Avoid assuming defaults when exact dimensions matter (specify $fn explicitly in examples).
+
+--- VECTORS & STRINGS ---
+Vectors:
+  v = [1, 2, 3];
+  v[0] == v.x
+  concat(a, b)
+  len(v)
+
+Strings:
+  str(123) -> "123"
+  len("abc") -> 3
+  chr(), ord(), format via str()
+
+--- PRIMITIVE 3D MODULES (concise signatures + examples) ---
+cube(size = [x,y,z] | x, center = false);
+Example:
+  // mm units
+  cube(size=[20, 10, 5], center=true);
+
+sphere(r = value | d = diameter);
+Example:
+  sphere(r=5); // 5 mm radius
+
+cylinder(h = height, r = radius | r1=, r2=, d=diameter, center=false);
+Example:
+  cylinder(h=10, r1=5, r2=5, center=true);
+
+polyhedron(points = [[x,y,z],...], faces = [[i,j,k],...]);
+Notes:
+- Faces should be oriented consistently (right-hand rule) to avoid inverted normals.
+- Avoid duplicate points; index faces to unique vertices.
+Example (simple tetrahedron):
+  polyhedron(points=[[0,0,0],[10,0,0],[0,10,0],[0,0,10]], faces=[[0,1,2],[0,1,3],[0,2,3],[1,2,3]]);
+
+--- 2D PRIMITIVES & EXTRUSION ---
+square(size = [x,y] | size, center=false);
+circle(r= | d=, $fn=);
+polygon(points=[...], paths=[...]);
+text(text="...", size=..., font="...");
+
+linear_extrude(height=..., center=false, convexity=..., twist=0, slices=1, scale=1);
+Example:
+  linear_extrude(height=10, center=true, twist=90, slices=20) circle(r=2);
+
+rotate_extrude(angle=360, convexity=...);
+Example:
+  rotate_extrude() translate([2,0,0]) circle(r=1, $fn=60);
+
+--- TRANSFORMS ---
+translate(v) { ... }
+Example:
+  translate([10,0,0]) cube([5,5,5]);
+
+rotate(a = angle | v=[x,y,z]) { ... }
+Example:
+  rotate([0,0,45]) cube([10,2,1]);
+
+scale(v) { ... }
+Example:
+  scale([2,1,1]) sphere(r=5);
+
+mirror(v) { ... }
+Example:
+  mirror([0,1,0]) translate([0,10,0]) cube([5,5,1]);
+
+multmatrix(m) { ... }
+- Use 4x4 matrix in row-major order for affine transforms.
+Example (identity):
+  multmatrix([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]) cube(1);
+
+color(v) { ... }
+Example:
+  color("red") cube([5,5,5]);
+
+offset(r=..., delta=..., chamfer=false) for 2D/3D offsetting (behavior depends on context/version).
+Example:
+  translate([0,0,1]) offset(r=1) square([10,10]);
+
+--- BOOLEAN OPERATIONS & COMBINATIONS ---
+union() { children(); }
+difference() { children(); }
+intersection() { children(); }
+minkowski() { children(); } // expensive; used for rounded unions
+hull() { children(); } // convex hull of children
+render() { children(); } // forces CGAL-based render before export
+
+Examples:
+  union() {
+    cube([10,10,2]);
+    translate([5,5,0]) sphere(r=3);
+  }
+
+  difference() {
+    cube([30,30,10]);
+    translate([15,15,5]) sphere(r=8);
+  }
+
+--- CONTROL FLOW & MODULES ---
+module name(args...) { ... }
+Example:
+  module box(w,h,d) { cube([w,h,d]); }
+  box(10,20,5);
+
+Functions:
+  function_name(args) = expression;
+Example:
+  area = function circle_area(r) = PI * r * r; // PI available as constant
+
+for loops:
+  for (i = [0:10]) { ... }
+  for (i = [for (j=[0:2]) ...]) // comprehensions allowed
+intersection_for:
+  intersection_for (i = [...]) { ... } // intersection of multiple iterations
+
+if (cond) { ... } else { ... }
+conditional operator: cond ? a : b
+
+let (...) expr
+assign (...) expr
+
+assert(condition, "message") // runtime check that can stop rendering
+
+--- MATH & UTILITY FUNCTIONS (common subset) ---
+abs(x), ceil(x), floor(x), round(x), min(a,b), max(a,b), pow(a,b), sqrt(x),
+sin(x), cos(x), tan(x), asin(x), acos(x), atan(x), atan2(y,x),
+len(v), concat(a,b), cross(a,b), dot, norm,
+lookup(key, list, default), rands(min, max, count, seed), sign(x),
+mod(a,b), ln(x), log(x), exp(x)
+
+Example:
+  r = sqrt( (x*x) + (y*y) );
+
+--- STRING UTILITIES ---
+str(x), chr(n), ord(c), format via str()
+Example:
+  name = str("part_", 1); // -> "part_1"
+
+--- LIST COMPREHENSIONS & OBJECT ITERATION ---
+[ for (i = range) expr if (cond) ]
+for (k = obj) { ... } // iterate over object members
+
+Example:
+  pts = [ for (i=[0:5]) [i, i*i] ];
+
+--- IO, INCLUDE & MODULES FROM FILES ---
+include <file.scad> // textually inserts contents (creates symbols)
+use <file.scad> // imports modules/functions but does not include top-level geometry
+import("file.stl");
+import("file.dxf");
+import("file.svg");
+- include/use search path: current dir, library path, OPENSCADPATH environment variable.
+
+Example:
+  // in main.scad
+  use <mylib.scad>;
+  my_module();
+
+--- DEBUGGING, PREVIEW & RENDER ---
+- F5: preview (fast; uses CGAL preview mesh approximations)
+- F6: render (slower; higher-fidelity boolean meshes)
+- render() forces high-fidelity evaluation in script.
+
+echo(val) prints to console for debugging.
+assert(cond, "message") for checks.
+
+Pitfalls:
+- "No top level geometry to render" occurs when modules are defined but not invoked at top level.
+- Polyhedron face orientation errors lead to inverted normals or missing faces.
+- Very thin geometry can be lost in boolean ops due to mesh tolerances — consider small chamfers or use render().
+
+--- PERFORMANCE & MESH QUALITY ---
+- $fn, $fa, $fs control tessellation. Use modest values during development, increase for final render.
+- convexity parameter affects rendering of non-convex 2D shapes extruded or rotate_extrude; set conservatively.
+- Minkowski and hull are computationally expensive; avoid high-resolution children inside them.
+- Use translate/rotate before heavy geometry to reduce boolean complexity when possible.
+
+--- CLI & EXPORT ---
+Headless rendering and export:
+  openscad -o output.stl input.scad
+  openscad -o output.png --imgsize=800,600 input.scad
+  openscad -D 'var=val' -o out.stl input.scad // define variable from CLI
+
+Batch tips:
+- Use --render to force F6 semantics headless.
+- Use --export-format or file extension to control format (STL, OFF, DXF, PNG).
+
+--- BUILDING OPENSCAD (notes) ---
+- Build instructions vary by OS; depend on Qt and CGAL libraries. See official docs for dependencies.
+- Cross-compiling possible; ensure consistent versions of dependencies.
+- If building from sources, check for required libraries: CGAL, Boost, Eigen, OpenCSG, OpenGL, Qt versions.
+
+--- EXAMPLES & COMMON PATTERNS (concise collections) ---
+Parametrized box with chamfer:
+module chamfered_box(w,l,h,c) {
+  // w,l,h in mm; c chamfer radius
+  difference() {
+    cube(size=[w,l,h], center=true);
+    translate([-w/2, -l/2, -h/2]) minkowski() {
+      // carve corners by subtracting spheres (cheap example)
+      cube([w, l, h]);
+      sphere(r=c);
+    }
+  }
+}
+chamfered_box(40,30,10,1);
+
+Parametric gear outline (simplified):
+module gear(teeth=16, r=10, thickness=3) {
+  pts = [ for(i=[0:teeth-1]) let(a = i*360/teeth) [r*cos(a), r*sin(a)] ];
+  linear_extrude(height=thickness) polygon(points=pts);
+}
+gear(16, 12, 3);
+
+Array of bolts (example using module and for):
+module bolt() {
+  // simplified bolt shank
+  union() {
+    cylinder(h=8, r=1.5, center=false);
+    translate([0,0,8]) cylinder(h=2, r=2.5);
+  }
+}
+for (x=[0:20:60]) for (y=[0:20:60]) translate([x,y,0]) bolt();
+
+--- ADVANCED TOPICS & NOTES ---
+CSG semantics: OpenSCAD builds Constructive Solid Geometry via boolean operations. Order matters; difference() subtraction uses children order; intersection uses overlapping volume.
+
+Preview differences: Some expressions are evaluated differently in preview vs render due to polygon/mesh handling. If results differ, wrap with render() to force CGAL evaluation.
+
+Polyhedron precision: When generating polyhedra programmatically, ensure vertices are unique (round coordinates to sane precision) and face indices are valid integers.
+
+Determinism: Avoid using rands() for geometry identical across runs unless seed provided.
+
+Version differences: Some functions/parameters (e.g., multmatrix semantics, offset parameters) have changed across OpenSCAD versions. If agent targets a specific OpenSCAD version, include that constraint at top of generated code (comment).
+
+--- END OF DOCUMENT ---
