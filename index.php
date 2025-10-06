@@ -244,40 +244,242 @@ function show_interface() {
 <head>
     <title>AutoSCAD</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { display: flex; }
-        .sidebar { width: 200px; margin-right: 20px; }
-        .main { flex-grow: 1; }
-        textarea { width: 100%; height: 200px; }
-        .iteration-list { max-height: 400px; overflow-y: auto; }
-        .iteration-item { padding: 5px; cursor: pointer; border: 1px solid #ccc; margin-bottom: 5px; }
-        .iteration-item:hover { background-color: #f0f0f0; }
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            max-width: calc(100vw - 300px);
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin: 0 0 20px 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        
+        h2 {
+            font-size: 18px;
+            margin: 0 0 15px 0;
+            color: var(--text-color);
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+        
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        
+        select, input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+        
+        textarea {
+            min-height: 120px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        
+        .iteration-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        
+        .iteration-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        
+        .iteration-item:hover {
+            background-color: #f1f5f9;
+        }
+        
+        .iteration-item:last-child {
+            border-bottom: none;
+        }
+        
+        .iteration-item.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .status-message {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .status-info {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+        
+        .status-success {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+        
+        .status-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        
+        .preview-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        #rendered-image {
+            max-width: 100%;
+            max-height: 400px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: var(--border-color);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
-    <h1>AutoSCAD</h1>
     <div class="container">
         <div class="sidebar">
-            <button id="new-project">New Project</button>
-            <select id="project-selector"></select>
-            <div id="iteration-list" class="iteration-list"></div>
+            <h1>AutoSCAD</h1>
+            <button id="new-project">➕ New Project</button>
+            <select id="project-selector">
+                <option value="">Select a project...</option>
+            </select>
+            
+            <h2>Iterations</h2>
+            <div id="iteration-list" class="iteration-list">
+                <div class="iteration-item" style="text-align: center; color: var(--text-muted);">
+                    No iterations yet
+                </div>
+            </div>
         </div>
+        
         <div class="main">
-            <div>
-                <label>Project Name:</label>
-                <input type="text" id="project-name" style="width: 100%;">
+            <div class="card">
+                <label for="project-name">Project Name</label>
+                <input type="text" id="project-name" placeholder="Enter project name...">
+                
+                <label for="spec">Specification</label>
+                <textarea id="spec" placeholder="Describe your 3D model in natural language..."></textarea>
+                
+                <label for="scad-code">SCAD Code</label>
+                <textarea id="scad-code" placeholder="OpenSCAD code will appear here..."></textarea>
+                
+                <button id="generate">🚀 Generate & Refine</button>
+                <div class="progress-bar" style="display: none;" id="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div id="status-messages"></div>
             </div>
-            <div>
-                <label>Specification:</label>
-                <textarea id="spec"></textarea>
-            </div>
-            <div>
-                <label>SCAD Code:</label>
-                <textarea id="scad-code"></textarea>
-            </div>
-            <button id="generate">Generate</button>
-            <div id="result">
-                <img id="rendered-image" style="max-width: 100%;">
+            
+            <div class="card">
+                <h2>3D Preview</h2>
+                <div class="preview-container">
+                    <img id="rendered-image" src="" style="display: none;">
+                    <div id="no-preview" style="color: var(--text-muted);">
+                        No preview available. Generate a model to see it here.
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -301,7 +503,7 @@ function show_interface() {
                 .then(response => response.json())
                 .then(projects => {
                     const selector = document.getElementById('project-selector');
-                    selector.innerHTML = '';
+                    selector.innerHTML = '<option value="">Select a project...</option>';
                     projects.forEach(project => {
                         const option = document.createElement('option');
                         option.value = project.id;
@@ -330,14 +532,24 @@ function show_interface() {
                     document.getElementById('spec').value = '';
                     document.getElementById('scad-code').value = '';
                     document.getElementById('project-name').value = data.name;
-                    document.getElementById('iteration-list').innerHTML = '';
+                    document.getElementById('iteration-list').innerHTML = '<div class="iteration-item" style="text-align: center; color: var(--text-muted);">No iterations yet</div>';
+                    hidePreview();
+                    clearStatusMessages();
                 }
             });
         }
         
         function onProjectSelected(event) {
             currentProjectId = event.target.value;
-            loadProjectData(currentProjectId);
+            if (currentProjectId) {
+                loadProjectData(currentProjectId);
+            } else {
+                document.getElementById('project-name').value = '';
+                document.getElementById('spec').value = '';
+                document.getElementById('scad-code').value = '';
+                document.getElementById('iteration-list').innerHTML = '<div class="iteration-item" style="text-align: center; color: var(--text-muted);">No iterations yet</div>';
+                hidePreview();
+            }
         }
         
         function loadProjectData(projectId) {
@@ -351,14 +563,16 @@ function show_interface() {
                 .then(iterations => {
                     const list = document.getElementById('iteration-list');
                     list.innerHTML = '';
-                    iterations.forEach(iteration => {
-                        const item = document.createElement('div');
-                        item.className = 'iteration-item';
-                        item.textContent = 'Iteration ' + iteration.id;
-                        item.addEventListener('click', () => loadIteration(iteration));
-                        list.appendChild(item);
-                    });
-                    if (iterations.length > 0) {
+                    if (iterations.length === 0) {
+                        list.innerHTML = '<div class="iteration-item" style="text-align: center; color: var(--text-muted);">No iterations yet</div>';
+                    } else {
+                        iterations.forEach(iteration => {
+                            const item = document.createElement('div');
+                            item.className = 'iteration-item';
+                            item.textContent = 'Iteration ' + iteration.id;
+                            item.addEventListener('click', () => loadIteration(iteration));
+                            list.appendChild(item);
+                        });
                         loadIteration(iterations[0]);
                     }
                 });
@@ -368,11 +582,18 @@ function show_interface() {
             currentIterationId = iteration.id;
             document.getElementById('spec').value = iteration.spec;
             document.getElementById('scad-code').value = iteration.scad_code;
-            // TODO: Load rendered image if available
+            
+            // Highlight active iteration
+            document.querySelectorAll('.iteration-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
         }
         
         function updateProjectName() {
             const newName = document.getElementById('project-name').value;
+            if (!newName.trim()) return;
+            
             fetch('?action=update_project_name', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -390,8 +611,13 @@ function show_interface() {
             const spec = document.getElementById('spec').value;
             const scadCode = document.getElementById('scad-code').value;
             
-            if (!spec) {
+            if (!spec.trim()) {
                 alert('Please enter a specification');
+                return;
+            }
+            
+            if (!currentProjectId) {
+                alert('Please select or create a project first');
                 return;
             }
             
@@ -399,31 +625,55 @@ function show_interface() {
                 eventSource.close();
             }
             
+            // Show loading state
+            document.getElementById('generate').disabled = true;
+            document.getElementById('generate').textContent = 'Generating...';
+            document.getElementById('progress-bar').style.display = 'block';
+            document.getElementById('progress-fill').style.width = '0%';
+            clearStatusMessages();
+            
             // Pass spec and scad_code as GET parameters
             const sseUrl = '?action=sse&project_id=' + currentProjectId + 
                       '&spec=' + encodeURIComponent(spec) + 
                       '&scad_code=' + encodeURIComponent(scadCode);
             eventSource = new EventSource(sseUrl);
+            
             eventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 console.log(data);
                 
                 if (data.error) {
-                    alert('Error: ' + data.error);
+                    addStatusMessage('Error: ' + data.error, 'error');
+                    document.getElementById('generate').disabled = false;
+                    document.getElementById('generate').textContent = '🚀 Generate & Refine';
+                    document.getElementById('progress-bar').style.display = 'none';
                     eventSource.close();
                 } else if (data.iteration_started) {
                     currentIterationId = data.iteration_id;
+                    addStatusMessage('Started new iteration ' + data.iteration_id, 'info');
+                    document.getElementById('progress-fill').style.width = '25%';
                 } else if (data.render_complete) {
+                    addStatusMessage('Rendered 3D model', 'info');
                     document.getElementById('rendered-image').src = 'data:image/png;base64,' + data.image;
+                    document.getElementById('rendered-image').style.display = 'block';
+                    document.getElementById('no-preview').style.display = 'none';
+                    document.getElementById('progress-fill').style.width = '50%';
                 } else if (data.evaluation) {
-                    console.log('Evaluation:', data.evaluation);
+                    addStatusMessage('Evaluating specification...', 'info');
+                    document.getElementById('progress-fill').style.width = '75%';
                 } else if (data.plan) {
-                    console.log('Plan:', data.plan);
+                    addStatusMessage('Planning improvements...', 'info');
                 } else if (data.new_scad_code) {
                     document.getElementById('scad-code').value = data.new_scad_code;
+                    addStatusMessage('Generated new SCAD code', 'info');
                 } else if (data.spec_fulfilled) {
-                    alert('Specification fulfilled!');
+                    addStatusMessage('Specification fulfilled!', 'success');
+                    document.getElementById('progress-fill').style.width = '100%';
                 } else if (data.generation_complete) {
+                    addStatusMessage('Generation complete', 'success');
+                    document.getElementById('generate').disabled = false;
+                    document.getElementById('generate').textContent = '🚀 Generate & Refine';
+                    document.getElementById('progress-bar').style.display = 'none';
                     eventSource.close();
                     loadProjectData(currentProjectId);
                 }
@@ -436,6 +686,24 @@ function show_interface() {
                 body: 'project_id=' + currentProjectId + '&spec=' + encodeURIComponent(spec) + 
                       '&scad_code=' + encodeURIComponent(scadCode)
             });
+        }
+        
+        function addStatusMessage(message, type) {
+            const statusDiv = document.getElementById('status-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `status-message status-${type}`;
+            messageDiv.textContent = message;
+            statusDiv.appendChild(messageDiv);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+        
+        function clearStatusMessages() {
+            document.getElementById('status-messages').innerHTML = '';
+        }
+        
+        function hidePreview() {
+            document.getElementById('rendered-image').style.display = 'none';
+            document.getElementById('no-preview').style.display = 'block';
         }
     </script>
 </body>
