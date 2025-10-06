@@ -67,7 +67,7 @@ function render_scad($scad_code)
         $png_file = tempnam($temp_dir, "autoscad_{$view_name}_") . '.png';
 
         // Run OpenSCAD to render with specific camera parameters, --viewall and --autocenter
-        $command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " --viewall --autocenter " . escapeshellarg($scad_file);
+        $command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " --viewall --autocenter --view axes " . escapeshellarg($scad_file);
         exec($command . " 2>&1", $output, $return_code);
 
         // Check if the file was created and has content
