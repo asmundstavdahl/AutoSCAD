@@ -84,9 +84,10 @@ module autoscad_axis_cross(size=15) {
     $combined_scad_code = $axis_cross_code . "\n" . $scad_code . "\nautoscad_axis_cross();";
     file_put_contents($scad_file, $combined_scad_code);
 
-    // Define the 6 camera views using Euler angles in degrees
+    // Define the 7 camera views using Euler angles in degrees
     // The camera looks towards the origin from the specified angles
     $views = [
+        'default' => '--camera=0,0,0,55,0,25,100', // Default isometric view
         'front' => '--camera=0,0,10,0,0,0,50',
         'back' => '--camera=0,0,10,0,180,0,50',
         'left' => '--camera=0,0,10,0,90,0,50',
