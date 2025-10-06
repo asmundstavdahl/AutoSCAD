@@ -106,15 +106,53 @@ function render_scad($scad_code) {
 }
 
 // Call LLM via OpenRouter
-function call_llm($messages) {
+function call_llm($messages, $images = []) {
     $api_key = get_api_key();
     if (!$api_key) {
         return ['error' => 'OPENROUTER_API_KEY environment variable not set'];
     }
     
+    // Prepare messages with multimodal content if images are provided
+    $formatted_messages = [];
+    foreach ($messages as $message) {
+        // If there are images and this is a user message, we need to structure the content differently
+        if ($message['role'] === 'user' && !empty($images)) {
+            $content = [];
+            
+            // Add text content first
+            if (isset($message['content'])) {
+                $content[] = [
+                    'type' => 'text',
+                    'text' => $message['content']
+                ];
+            }
+            
+            // Add each image
+            foreach ($images as $view_name => $image_data) {
+                $content[] = [
+                    'type' => 'image_url',
+                    'image_url' => [
+                        'url' => "data:image/png;base64," . $image_data
+                    ]
+                ];
+            }
+            
+            $formatted_messages[] = [
+                'role' => $message['role'],
+                'content' => $content
+            ];
+        } else {
+            // Regular text message
+            $formatted_messages[] = [
+                'role' => $message['role'],
+                'content' => $message['content']
+            ];
+        }
+    }
+    
     $data = [
-        'model' => 'google/gemma-3-27b-it',
-        'messages' => $messages,
+        'model' => 'google/gemini-2.0-flash-exp:free', // This model supports images
+        'messages' => $formatted_messages,
         'max_tokens' => 4000
     ];
     

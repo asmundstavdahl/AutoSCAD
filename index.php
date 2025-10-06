@@ -185,7 +185,7 @@ function sse() {
             ]
         ];
         
-        $plan_result = call_llm($plan_messages);
+        $plan_result = call_llm($plan_messages); // No images for planning
         if (isset($plan_result['error'])) {
             send_sse_message(['error' => 'Planning failed: ' . $plan_result['error']]);
             break;
@@ -207,7 +207,7 @@ function sse() {
             ]
         ];
         
-        $generate_result = call_llm($generate_messages);
+        $generate_result = call_llm($generate_messages); // No images for code generation
         if (isset($generate_result['error'])) {
             send_sse_message(['error' => 'Code generation failed: ' . $generate_result['error']]);
             break;
