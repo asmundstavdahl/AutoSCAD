@@ -203,7 +203,7 @@ function call_llm($messages, $images = [])
     }
 
     $data = [
-        'model' => 'google/gemma-3-27b-it',
+        'model' => 'openai/gpt-5-mini',
         'messages' => $formatted_messages,
         'max_tokens' => 4000
     ];
