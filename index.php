@@ -502,34 +502,34 @@ function show_interface() {
             color: white;
         }
         
-        .status-message {
-            padding: 10px;
+        .status-messages-container {
+            height: 120px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
             border-radius: 6px;
-            margin: 10px 0;
-            font-size: 14px;
-            transition: opacity 0.5s ease;
+            padding: 8px;
+            background-color: #f8fafc;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.4;
         }
         
-        .status-message.fading {
-            opacity: 0;
+        .status-message {
+            margin-bottom: 4px;
+            padding: 4px;
+            border-radius: 3px;
         }
         
         .status-info {
-            background-color: #dbeafe;
             color: #1e40af;
-            border: 1px solid #93c5fd;
         }
         
         .status-success {
-            background-color: #dcfce7;
             color: #166534;
-            border: 1px solid #86efac;
         }
         
         .status-error {
-            background-color: #fee2e2;
             color: #991b1b;
-            border: 1px solid #fca5a5;
         }
         
         .preview-container {
@@ -604,7 +604,7 @@ function show_interface() {
                 <div class="progress-bar" style="display: none;" id="progress-bar">
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
-                <div id="status-messages"></div>
+                <div id="status-messages" class="status-messages-container"></div>
             </div>
             
             <div class="card">
@@ -880,20 +880,18 @@ function show_interface() {
             const messageDiv = document.createElement('div');
             messageDiv.className = `status-message status-${type}`;
             messageDiv.textContent = message;
-            statusDiv.appendChild(messageDiv);
-            statusDiv.scrollTop = statusDiv.scrollHeight;
             
-            // Remove the message after 5 seconds with fade out
-            setTimeout(() => {
-                if (messageDiv.parentNode === statusDiv) {
-                    messageDiv.classList.add('fading');
-                    setTimeout(() => {
-                        if (messageDiv.parentNode === statusDiv) {
-                            statusDiv.removeChild(messageDiv);
-                        }
-                    }, 500);
-                }
-            }, 5000);
+            // Insert new message at the top
+            if (statusDiv.firstChild) {
+                statusDiv.insertBefore(messageDiv, statusDiv.firstChild);
+            } else {
+                statusDiv.appendChild(messageDiv);
+            }
+            
+            // Keep only the last 5 messages
+            while (statusDiv.children.length > 5) {
+                statusDiv.removeChild(statusDiv.lastChild);
+            }
         }
         
         function clearStatusMessages() {
