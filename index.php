@@ -343,6 +343,7 @@ function show_interface() {
         .container {
             display: flex;
             min-height: 100vh;
+            flex-direction: row;
         }
         
         .sidebar {
@@ -351,12 +352,15 @@ function show_interface() {
             border-right: 1px solid var(--border-color);
             padding: 20px;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            overflow-y: auto;
         }
         
         .main {
-            flex-grow: 1;
+            flex: 1;
             padding: 30px;
-            max-width: calc(100vw - 300px);
+            box-sizing: border-box;
+            overflow-x: hidden;
         }
         
         .card {
@@ -366,6 +370,7 @@ function show_interface() {
             margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             border: 1px solid var(--border-color);
+            box-sizing: border-box;
         }
         
         .input-row {
@@ -377,14 +382,10 @@ function show_interface() {
             flex: 1;
             display: flex;
             flex-direction: column;
+            min-width: 0; /* Prevent flex items from overflowing */
         }
         
         @media (max-width: 768px) {
-            .input-row {
-                flex-direction: column;
-                gap: 0;
-            }
-            
             .container {
                 flex-direction: column;
             }
@@ -393,10 +394,25 @@ function show_interface() {
                 width: 100%;
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
+                max-height: 40vh;
+                overflow-y: auto;
             }
             
             .main {
+                padding: 20px;
+                width: 100%;
+                overflow-x: hidden;
+            }
+            
+            .input-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            
+            /* Ensure textareas don't overflow on mobile */
+            textarea {
                 max-width: 100%;
+                box-sizing: border-box;
             }
         }
         
