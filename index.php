@@ -888,10 +888,8 @@ function show_interface() {
                 statusDiv.appendChild(messageDiv);
             }
             
-            // Keep only the last 5 messages
-            while (statusDiv.children.length > 5) {
-                statusDiv.removeChild(statusDiv.lastChild);
-            }
+            // Scroll to top to show the newest message
+            statusDiv.scrollTop = 0;
         }
         
         function clearStatusMessages() {
