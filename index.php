@@ -368,6 +368,38 @@ function show_interface() {
             border: 1px solid var(--border-color);
         }
         
+        .input-row {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .input-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 768px) {
+            .input-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            
+            .main {
+                max-width: 100%;
+            }
+        }
+        
         h1 {
             color: var(--primary-color);
             margin: 0 0 20px 0;
@@ -541,11 +573,16 @@ function show_interface() {
                 <label for="project-name">Project Name</label>
                 <input type="text" id="project-name" placeholder="Enter project name...">
                 
-                <label for="spec">Specification</label>
-                <textarea id="spec" placeholder="Describe your 3D model in natural language..."></textarea>
-                
-                <label for="scad-code">SCAD Code</label>
-                <textarea id="scad-code" placeholder="OpenSCAD code will appear here..."></textarea>
+                <div class="input-row">
+                    <div class="input-column">
+                        <label for="spec">Specification</label>
+                        <textarea id="spec" placeholder="Describe your 3D model in natural language..."></textarea>
+                    </div>
+                    <div class="input-column">
+                        <label for="scad-code">SCAD Code</label>
+                        <textarea id="scad-code" placeholder="OpenSCAD code will appear here..."></textarea>
+                    </div>
+                </div>
                 
                 <button id="generate">🚀 Generate & Refine</button>
                 <div class="progress-bar" style="display: none;" id="progress-bar">
