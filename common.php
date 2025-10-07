@@ -98,11 +98,22 @@ module autoscad_axis_cross(size=15) {
 
     $images = [];
 
+    // Check if xvfb-run is available
+    $xvfb_available = !empty(shell_exec('which xvfb-run'));
+    
     foreach ($views as $view_name => $camera_params) {
         $png_file = tempnam($temp_dir, "autoscad_{$view_name}_") . '.png';
 
-        // Run OpenSCAD to render with specific camera parameters, --viewall and --autocenter
-        $command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " --viewall --autocenter --view axes " . escapeshellarg($scad_file);
+        // Build the base command
+        $base_command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " --viewall --autocenter --view axes " . escapeshellarg($scad_file);
+        
+        // Use xvfb-run if available, otherwise use openscad directly
+        if ($xvfb_available) {
+            $command = "xvfb-run -a " . $base_command;
+        } else {
+            $command = $base_command;
+        }
+        
         exec($command . " 2>&1", $output, $return_code);
 
         // Check if the file was created and has content
