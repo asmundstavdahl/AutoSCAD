@@ -49,51 +49,21 @@ function render_scad($scad_code)
     $temp_dir = sys_get_temp_dir();
     $scad_file = tempnam($temp_dir, 'autoscad_') . '.scad';
     
-    // Add axis cross to the SCAD code with a unique module name
-    $axis_cross_code = "
-// AutoSCAD Axis cross (X=red, Y=green, Z=blue)
-module autoscad_axis_cross(size=15) {
-    // X-axis (red)
-    color(\"red\") {
-        translate([size/2, 0, 0]) 
-            cube([size, 0.5, 0.5], center=true);
-        translate([size, 0, 0]) 
-            rotate([0, 0, 45]) 
-            cube([1.5, 0.3, 0.3], center=true);
-    }
-    // Y-axis (green)
-    color(\"green\") {
-        translate([0, size/2, 0]) 
-            cube([0.5, size, 0.5], center=true);
-        translate([0, size, 0]) 
-            rotate([0, 0, 45]) 
-            cube([0.3, 1.5, 0.3], center=true);
-    }
-    // Z-axis (blue)
-    color(\"blue\") {
-        translate([0, 0, size/2]) 
-            cube([0.5, 0.5, size], center=true);
-        translate([0, 0, size]) 
-            rotate([45, 0, 0]) 
-            cube([0.3, 0.3, 1.5], center=true);
-    }
-}
-";
-    
-    // Combine the axis cross with the user's code
-    $combined_scad_code = $axis_cross_code . "\n" . $scad_code . "\nautoscad_axis_cross();";
-    file_put_contents($scad_file, $combined_scad_code);
+    // Write the user's SCAD code directly to the temporary file.
+    // OpenSCAD's built‑in axis cross is enabled via the '--view axes' flag,
+    // so we no longer add a custom axis cross module.
+    file_put_contents($scad_file, $scad_code);
 
     // Define the 7 camera views using Euler angles in degrees
     // The camera looks towards the origin from the specified angles
     $views = [
         'default' => '--camera=0,0,0,55,0,25,100', // Default isometric view
-        'front' => '--camera=0,0,10,0,0,0,50',
-        'back' => '--camera=0,0,10,0,180,0,50',
-        'left' => '--camera=0,0,10,0,90,0,50',
-        'right' => '--camera=0,0,10,0,270,0,50',
-        'top' => '--camera=0,0,10,90,0,0,50',
-        'bottom' => '--camera=0,0,10,270,0,0,50'
+        'front'   => '--camera=0,0,10,0,0,0,50',
+        'back'    => '--camera=0,0,10,0,180,0,50',
+        'left'    => '--camera=0,0,10,0,90,0,50',
+        'right'   => '--camera=0,0,10,0,270,0,50',
+        'top'     => '--camera=0,0,10,90,0,0,50',
+        'bottom'  => '--camera=0,0,10,270,0,0,50'
     ];
 
     $images = [];
