@@ -173,7 +173,7 @@ function call_llm($messages, $images = [])
     }
 
     $data = [
-        'model' => 'google/gemini-2.5-pro',
+        'model' => 'google/gemma-3-27b-it',
         'messages' => $formatted_messages,
         'max_tokens' => 4000
     ];
