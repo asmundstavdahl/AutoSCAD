@@ -203,7 +203,7 @@ function call_llm($messages, $images = [])
     }
 
     $data = [
-        'model' => 'openai/gpt-5-mini',
+        'model' => 'google/gemini-2.5-pro',
         'messages' => $formatted_messages,
         'max_tokens' => 4000
     ];
