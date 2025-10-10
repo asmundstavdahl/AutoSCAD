@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 // Database setup
@@ -39,6 +40,33 @@ function check_openscad()
     return !empty($output);
 }
 
+function assert_setup_ok()
+{
+    $errors = [];
+    if (!check_openscad()) {
+        $errors[] = "OpenSCAD is not installed or not in PATH";
+    }
+
+    if (!get_api_key()) {
+        $errors[] = "OPENROUTER_API_KEY environment variable not set";
+    }
+
+    shell_exec("mkdir -p var/tmp");
+    touch("var/tmp/setup-check.delete-me");
+    if (!file_exists("var/tmp/setup-check.delete-me")) {
+        $errors[] = "var/tmp or its permissions are not in order";
+    }
+
+    if (!empty($errors)) {
+        echo "Setup incomplete – please fix the following:<br>\n";
+        foreach ($errors as $error) {
+            echo "- $error<br>\n";
+        }
+        http_response_code(500);
+        exit;
+    }
+}
+
 // Get API key
 function get_api_key()
 {
@@ -71,11 +99,9 @@ function get_max_iterations()
 // Render SCAD code to PNG from 7 viewpoints with axis cross
 function render_scad($scad_code)
 {
-    $temp_dir = sys_get_temp_dir();
-    $scad_file_tmp = tempnam($temp_dir, "autoscad_");
-    $scad_file = $scad_file_tmp . ".scad";
-    // Rename the temp file so the .scad path exists (avoids OpenSCAD 'Can't open input file')
-    rename($scad_file_tmp, $scad_file);
+    $render_id = (string) microtime(true);
+    $temp_dir = __DIR__ . "/var/tmp";
+    $scad_file = $temp_dir . "/$render_id.scad";
 
     // Write the user's SCAD code directly to the temporary file.
     // OpenSCAD's built‑in axis cross is enabled via the "--view axes" flag,
@@ -100,10 +126,7 @@ function render_scad($scad_code)
     $xvfb_available = !empty(shell_exec("which xvfb-run"));
 
     foreach ($views as $view_name => $camera_params) {
-        $png_file_tmp = tempnam($temp_dir, "autoscad_{$view_name}_");
-        $png_file = $png_file_tmp . ".png";
-        // Rename to ensure the .png file actually exists at that path
-        rename($png_file_tmp, $png_file);
+        $png_file = $temp_dir . "/{$render_id}_{$view_name}.png";
 
         // Build the base command
         $base_command =
@@ -120,7 +143,7 @@ function render_scad($scad_code)
         } else {
             $command = $base_command;
         }
-
+        error_log($command);
         exec($command . " 2>&1", $output, $return_code);
 
         // Check if the file was created and has content
@@ -130,7 +153,7 @@ function render_scad($scad_code)
             filesize($png_file) === 0
         ) {
             // Clean up on error
-            unlink($scad_file);
+            #unlink($scad_file);
             foreach ($images as $temp_png_info) {
                 if (file_exists($temp_png_info["file"])) {
                     unlink($temp_png_info["file"]);
@@ -235,7 +258,7 @@ function call_llm($messages, $images = [])
     if ($http_code !== 200) {
         return [
             "error" =>
-                "LLM API request failed with status " .
+            "LLM API request failed with status " .
                 $http_code .
                 ": " .
                 $response,
@@ -249,4 +272,3 @@ function call_llm($messages, $images = [])
         return ["error" => "Invalid response from LLM API"];
     }
 }
-?>

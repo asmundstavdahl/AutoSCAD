@@ -2,3 +2,4 @@
 .env
 model.scad
 autoscad.db
+/var/*
