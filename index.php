@@ -87,7 +87,7 @@ function get_iterations()
     $project_id = $_GET["project_id"];
 
     $stmt = $db->prepare(
-        "SELECT *, row_number() OVER (PARTITION BY project_id ORDER BY created_at ASC) AS sequence FROM iterations WHERE project_id = ? ORDER BY created_at ASC",
+        "SELECT *, row_number() OVER (PARTITION BY project_id ORDER BY created_at ASC) AS sequence FROM iterations WHERE project_id = ? ORDER BY created_at DESC",
     );
     $stmt->execute([$project_id]);
     $iterations = $stmt->fetchAll(PDO::FETCH_ASSOC);
