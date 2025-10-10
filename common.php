@@ -1,8 +1,10 @@
 <?php
+declare(strict_types=1);
+
 // Database setup
 function get_db()
 {
-    $db = new PDO('sqlite:autoscad.db');
+    $db = new PDO("sqlite:autoscad.db");
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     return $db;
 }
@@ -33,69 +35,110 @@ function init_db()
 // Check if OpenSCAD is available
 function check_openscad()
 {
-    $output = shell_exec('which openscad');
+    $output = shell_exec("which openscad");
     return !empty($output);
 }
 
 // Get API key
 function get_api_key()
 {
-    return getenv('OPENROUTER_API_KEY');
+    return getenv("OPENROUTER_API_KEY");
 }
 
-// Render SCAD code to PNG from 6 directions with axis cross
+// Get configurable model
+function get_model()
+{
+    $model = getenv("OPENROUTER_MODEL");
+    if ($model === false || $model === "") {
+        $model = "google/gemma-3-27b-it";
+    }
+    return $model;
+}
+
+// Get configurable max iterations (fallback 3)
+function get_max_iterations()
+{
+    $raw = getenv("AUTOSCAD_MAX_ITERATIONS");
+    if ($raw !== false && ctype_digit($raw)) {
+        $val = (int) $raw;
+        if ($val > 0) {
+            return $val;
+        }
+    }
+    return 3;
+}
+
+// Render SCAD code to PNG from 7 viewpoints with axis cross
 function render_scad($scad_code)
 {
     $temp_dir = sys_get_temp_dir();
-    $scad_file = tempnam($temp_dir, 'autoscad_') . '.scad';
-    
+    $scad_file_tmp = tempnam($temp_dir, "autoscad_");
+    $scad_file = $scad_file_tmp . ".scad";
+    // Rename the temp file so the .scad path exists (avoids OpenSCAD 'Can't open input file')
+    rename($scad_file_tmp, $scad_file);
+
     // Write the user's SCAD code directly to the temporary file.
-    // OpenSCAD's built‑in axis cross is enabled via the '--view axes' flag,
+    // OpenSCAD's built‑in axis cross is enabled via the "--view axes" flag,
     // so we no longer add a custom axis cross module.
     file_put_contents($scad_file, $scad_code);
 
     // Define the 7 camera views using Euler angles in degrees
     // The camera looks towards the origin from the specified angles
     $views = [
-        'default' => '--camera=0,0,0,55,0,25,100', // Default isometric view
-        'front'   => '--camera=0,0,10,0,0,0,50',
-        'back'    => '--camera=0,0,10,0,180,0,50',
-        'left'    => '--camera=0,0,10,0,90,0,50',
-        'right'   => '--camera=0,0,10,0,270,0,50',
-        'top'     => '--camera=0,0,10,90,0,0,50',
-        'bottom'  => '--camera=0,0,10,270,0,0,50'
+        "default" => "--camera=0,0,0,55,0,25,100", // Default isometric view
+        "front" => "--camera=0,0,10,0,0,0,50",
+        "back" => "--camera=0,0,10,0,180,0,50",
+        "left" => "--camera=0,0,10,0,90,0,50",
+        "right" => "--camera=0,0,10,0,270,0,50",
+        "top" => "--camera=0,0,10,90,0,0,50",
+        "bottom" => "--camera=0,0,10,270,0,0,50",
     ];
 
     $images = [];
 
     // Check if xvfb-run is available
-    $xvfb_available = !empty(shell_exec('which xvfb-run'));
-    
+    $xvfb_available = !empty(shell_exec("which xvfb-run"));
+
     foreach ($views as $view_name => $camera_params) {
-        $png_file = tempnam($temp_dir, "autoscad_{$view_name}_") . '.png';
+        $png_file_tmp = tempnam($temp_dir, "autoscad_{$view_name}_");
+        $png_file = $png_file_tmp . ".png";
+        // Rename to ensure the .png file actually exists at that path
+        rename($png_file_tmp, $png_file);
 
         // Build the base command
-        $base_command = "openscad -o " . escapeshellarg($png_file) . " " . $camera_params . " --viewall --autocenter --view axes " . escapeshellarg($scad_file);
-        
+        $base_command =
+            "openscad -o " .
+            escapeshellarg($png_file) .
+            " " .
+            $camera_params .
+            " --viewall --autocenter --view axes " .
+            escapeshellarg($scad_file);
+
         // Use xvfb-run if available, otherwise use openscad directly
         if ($xvfb_available) {
             $command = "xvfb-run -a " . $base_command;
         } else {
             $command = $base_command;
         }
-        
+
         exec($command . " 2>&1", $output, $return_code);
 
         // Check if the file was created and has content
-        if ($return_code !== 0 || !file_exists($png_file) || filesize($png_file) === 0) {
+        if (
+            $return_code !== 0 ||
+            !file_exists($png_file) ||
+            filesize($png_file) === 0
+        ) {
             // Clean up on error
             unlink($scad_file);
             foreach ($images as $temp_png_info) {
-                if (file_exists($temp_png_info['file'])) {
-                    unlink($temp_png_info['file']);
+                if (file_exists($temp_png_info["file"])) {
+                    unlink($temp_png_info["file"]);
                 }
             }
-            $error_msg = "OpenSCAD rendering failed for $view_name view: " . implode("\n", $output);
+            $error_msg =
+                "OpenSCAD rendering failed for $view_name view: " .
+                implode("\n", $output);
             if (file_exists($png_file)) {
                 if (filesize($png_file) === 0) {
                     $error_msg .= " (File exists but is empty)";
@@ -107,23 +150,23 @@ function render_scad($scad_code)
                     }
                 }
             }
-            return ['error' => $error_msg];
+            return ["error" => $error_msg];
         }
 
         $images[$view_name] = [
-            'data' => base64_encode(file_get_contents($png_file)),
-            'file' => $png_file
+            "data" => base64_encode(file_get_contents($png_file)),
+            "file" => $png_file,
         ];
     }
 
     // Clean up
     unlink($scad_file);
     foreach ($images as $view_name => $image_info) {
-        unlink($image_info['file']);
-        $images[$view_name] = $image_info['data'];
+        unlink($image_info["file"]);
+        $images[$view_name] = $image_info["data"];
     }
 
-    return ['images' => $images];
+    return ["images" => $images];
 }
 
 // Call LLM via OpenRouter
@@ -131,62 +174,58 @@ function call_llm($messages, $images = [])
 {
     $api_key = get_api_key();
     if (!$api_key) {
-        return ['error' => 'OPENROUTER_API_KEY environment variable not set'];
+        return ["error" => "OPENROUTER_API_KEY environment variable not set"];
     }
 
     // Prepare messages with multimodal content if images are provided
     $formatted_messages = [];
     foreach ($messages as $message) {
-        // If there are images and this is a user message, we need to structure the content differently
-        if ($message['role'] === 'user' && !empty($images)) {
+        if ($message["role"] === "user" && !empty($images)) {
             $content = [];
 
-            // Add text content first
-            if (isset($message['content'])) {
+            if (isset($message["content"])) {
                 $content[] = [
-                    'type' => 'text',
-                    'text' => $message['content']
+                    "type" => "text",
+                    "text" => $message["content"],
                 ];
             }
 
-            // Add each image
             foreach ($images as $view_name => $image_data) {
                 $content[] = [
-                    'type' => 'image_url',
-                    'image_url' => [
-                        'url' => "data:image/png;base64," . $image_data
-                    ]
+                    "type" => "image_url",
+                    "image_url" => [
+                        "url" => "data:image/png;base64," . $image_data,
+                    ],
                 ];
             }
 
             $formatted_messages[] = [
-                'role' => $message['role'],
-                'content' => $content
+                "role" => $message["role"],
+                "content" => $content,
             ];
         } else {
-            // Regular text message
             $formatted_messages[] = [
-                'role' => $message['role'],
-                'content' => $message['content']
+                "role" => $message["role"],
+                "content" => $message["content"],
             ];
         }
     }
 
     $data = [
-        'model' => 'google/gemma-3-27b-it',
-        'messages' => $formatted_messages,
-        'max_tokens' => 4000
+        "model" => get_model(),
+        "messages" => $formatted_messages,
+        "max_tokens" => 4000,
     ];
 
-    $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+    $ch = curl_init("https://openrouter.ai/api/v1/chat/completions");
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($data),
         CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $api_key
-        ]
+            "Content-Type: application/json",
+            "Authorization: Bearer " . $api_key,
+        ],
     ]);
 
     $response = curl_exec($ch);
@@ -194,14 +233,20 @@ function call_llm($messages, $images = [])
     curl_close($ch);
 
     if ($http_code !== 200) {
-        return ['error' => 'LLM API request failed with status ' . $http_code . ': ' . $response];
+        return [
+            "error" =>
+                "LLM API request failed with status " .
+                $http_code .
+                ": " .
+                $response,
+        ];
     }
 
     $result = json_decode($response, true);
-    if (isset($result['choices'][0]['message']['content'])) {
-        return ['content' => $result['choices'][0]['message']['content']];
+    if (isset($result["choices"][0]["message"]["content"])) {
+        return ["content" => $result["choices"][0]["message"]["content"]];
     } else {
-        return ['error' => 'Invalid response from LLM API'];
+        return ["error" => "Invalid response from LLM API"];
     }
 }
 ?>

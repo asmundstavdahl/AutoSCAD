@@ -10,6 +10,7 @@
 - Types: Use strict typing where possible and PHPDoc using PHPStan features whenever needed to complete type specifications
 - Naming: Descriptive, avoid abbreviations
 - Error handling: Don't over do it
+- Strings: In PHP, prefer double quoted strings. In JS, prefer single quoted strings.
 - Preserve existing functionality when modifying code
 - Avoid recursive modules in SCAD generation
 - Ensure generated SCAD code is valid

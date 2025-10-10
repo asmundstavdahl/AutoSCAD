@@ -2,114 +2,135 @@
 
 ## What is AutoSCAD?
 
-AutoSCAD is an AI‑agent that delegates the implementation of a 3D model in OpenSCAD.  
-A web interface lets users describe a model in natural language; the system then iteratively generates, renders, evaluates, and refines OpenSCAD code via a Large Language Model (LLM) until the specification is satisfied.
+AutoSCAD is an AI‑agent that delegates implementation and refinement of a 3D model in OpenSCAD.
+A web interface lets users describe a model in natural language; the system then iteratively generates, renders, evaluates, and refines OpenSCAD code via a Large Language Model (LLM) until the specification is satisfied or an iteration cap is reached.
 
 ## Dependencies
 
-- **OpenSCAD** – required for rendering SCAD code to PNG images. Must be installed and available in the system `PATH`.
-- **OpenRouter API key** – required for accessing the LLM service. Set as the environment variable `OPENROUTER_API_KEY`.
-- **PHP** – with the cURL extension for API calls and PDO‑SQLite for database storage.
-- **Web server** – PHP built‑in server (`php -S`) or any compatible server that can serve the PHP files.
+- **OpenSCAD** – required for rendering SCAD code to PNG images (must be in system `PATH`).
+- **OpenRouter API key** – required for accessing the LLM service (`OPENROUTER_API_KEY` env var).
+- **PHP** – with cURL (HTTP) and PDO‑SQLite.
+- **Web server** – PHP built‑in server (`php -S`) or any server that can serve these PHP files.
+- **(Optional) Xvfb** – `xvfb-run` enables headless rendering on systems without a display.
 
 ## Configuration
 
-- **LLM model** – `google/gemini-2.5-pro` via the OpenRouter API (updated from the previous `google/gemma-3-27b-it`).
+- **LLM model** – default: `google/gemma-3-27b-it`.
+  Override with environment variable: `OPENROUTER_MODEL`.
 - **Base URL** – `https://openrouter.ai/api/v1/chat/completions`.
-- **Maximum iterations** – default `3` (configurable by changing `$max_iterations` in `index.php`).
-- **Input limits** – none enforced by the backend; the UI validates that the specification is not empty.
-- **File handling** – temporary files are created in the system temporary directory and deleted after each render.
-- **Xvfb support** – if `xvfb-run` is available, rendering is performed inside a virtual X server to work on headless systems.
+- **Maximum iterations** – default: `3`.
+  Override with environment variable: `AUTOSCAD_MAX_ITERATIONS`.
+- **Input limits** – no backend length constraints; frontend only checks that the specification is non‑empty.
+- **Temporary files** – created under the system temp directory and deleted after each render.
+- **Headless rendering** – if `xvfb-run` is available it wraps each OpenSCAD call automatically.
 
 ## Data Storage
 
-All specifications, SCAD code, and rendered images are persisted in a SQLite database (`autoscad.db`). This enables full history tracking per project.
+SQLite database file: `autoscad.db`.
 
-### Database schema
+### Tables
 
-- **projects** table
-
+- **projects**
   - `id` – INTEGER PRIMARY KEY AUTOINCREMENT
-  - `name` – TEXT (editable from the UI)
+  - `name` – TEXT
   - `created_at` – DATETIME DEFAULT CURRENT_TIMESTAMP
 
-- **iterations** table
+- **iterations**
   - `id` – INTEGER PRIMARY KEY AUTOINCREMENT
-  - `project_id` – INTEGER (foreign key to `projects.id`)
+  - `project_id` – INTEGER (FK → projects.id)
   - `spec` – TEXT
   - `scad_code` – TEXT
   - `created_at` – DATETIME DEFAULT CURRENT_TIMESTAMP
 
+Each refinement loop appends or updates a single iteration row (initial insert, then code updates).
+
 ## Architecture
 
-- **Backend** – pure PHP functions (`index.php`, `common.php`) handle routing, database CRUD, LLM calls, and SCAD rendering. No classes or third‑party packages are used.
-- **Frontend** – HTML/CSS/JavaScript with AJAX for form submission and Server‑Sent Events (SSE) for real‑time streaming of generation progress.
-- **Generation loop** – runs inside the SSE endpoint (`action=sse`). It:
-  1. Inserts a new iteration record.
-  2. Renders the current SCAD code from **seven** viewpoints (default isometric + front, back, left, right, top, bottom). An axis‑cross (X = red, Y = green, Z = blue) is automatically added to every render.
-  3. Sends the images to the LLM for evaluation.
-  4. Parses the LLM’s JSON response (`{"fulfilled": true/false, "reasoning": "…"}`).
-  5. If not fulfilled, asks the LLM for a concrete plan, then for new SCAD code, cleans any markdown, and repeats until the spec is fulfilled or the iteration limit is reached.
-- **UI enhancements** – the interface now includes:
-  - A **progress bar** and colour‑coded status messages (info, success, error).
-  - A **sidebar** with a “New Project” button, project selector, and a clickable list of iterations.
-  - An editable **Project Name** field that updates the database on change.
-  - A **preview grid** that displays the seven rendered images in a responsive 4‑column layout.
-  - Real‑time updates via SSE without full page reloads.
+- **Backend** – pure PHP function style (`index.php`, `common.php`). No frameworks or third‑party packages.
+- **Frontend** – Vanilla HTML/CSS/JS. Server‑Sent Events (SSE) stream incremental status updates.
+- **Rendering** – 7 viewpoints (default isometric + front, back, left, right, top, bottom). OpenSCAD’s axis display (`--view axes`) supplies a color‑coded axis cross (X=red, Y=green, Z=blue).
+- **LLM integration** – Multi‑turn orchestration: initial code (optionally user‑supplied), rendering, evaluation, planning, regeneration.
 
-## Supported Usage Patterns
+## Generation Loop (High Level)
 
-### Basic workflow
+For each user‑triggered “Generate & Refine” action:
 
-1. **Create or select a project** using the sidebar controls. New projects receive a timestamp‑based default name.
-2. **Select an iteration** (if any) to load its specification and SCAD code into the text areas.
-3. **Edit the specification** (or keep the existing one). The SCAD field may be left empty to let the agent generate code from scratch.
-4. Click **Generate & Refine**. The client opens an SSE connection that streams:
-   - Iteration start notification.
-   - Rendering attempts and any automatic fixes.
-   - Evaluation results.
-   - Planning steps.
-   - Newly generated SCAD code.
-   - Progress‑bar updates and status messages.
-5. The backend renders the model from the seven viewpoints, adds the axis cross, and sends the base‑64 PNGs back to the client.
-6. The LLM evaluates the rendered images against the specification and replies with a JSON verdict.
-7. If the spec is not fulfilled, the LLM provides a plan and new SCAD code, which the backend stores and feeds into the next loop iteration.
-8. When the spec is fulfilled (or the iteration limit is hit), the final SCAD code and images are displayed. The user can start a new iteration by editing the spec or SCAD code.
+1. Insert a new `iterations` row (initial `spec`, initial or empty `scad_code`).
+2. Attempt to render the SCAD code from 7 viewpoints.
+   - Up to 3 automatic fix attempts if OpenSCAD reports syntax / compile errors.
+   - Fix attempts use an OpenSCAD reference context.
+3. If rendering succeeds:
+   - Send the specification, current SCAD code, and rendered images to the LLM.
+   - The LLM returns a **plain text evaluation** (not JSON) that must clearly indicate whether the spec is fulfilled.
+4. If the model is NOT fulfilled:
+   - Ask LLM for a **plain text improvement plan** (ordered steps or rationale).
+   - Ask LLM for revised SCAD code (markdown fences stripped if present).
+   - Update the existing iteration row with the new SCAD code.
+   - Continue to next iteration until fulfilled or iteration cap reached.
+5. Stream status, progress, intermediate code, and final outcome to the client via SSE.
 
-### UI specifics
+## Evaluation & Planning (Plain Text Convention)
 
-- **Project Management** – “New Project” creates a fresh entry; the project selector lists all projects ordered by creation date. Changing the project name updates the DB instantly.
-- **Iteration Navigation** – the sidebar shows a scrollable list of iterations (`Iteration 1`, `Iteration 2`, …). Clicking an item loads its data and highlights the active iteration.
-- **Status area** – a scrollable box shows timestamped messages with colour coding (`info`, `success`, `error`).
-- **Progress bar** – visual feedback of the generation pipeline (0 % → 100 %).
-- **Preview** – rendered images are shown in a responsive grid; each image is labelled (Default, Front, Back, Left, Right, Top, Bottom).
+- The evaluation response is plain text. It should contain:
+  - A clear fulfillment statement (e.g., “Fulfilled” / “Not fulfilled”).
+  - Brief reasoning.
+- The plan response is plain text, typically a concise list of steps (bulleted or numbered) or a short rationale.
+- No JSON is required or expected for either evaluation or planning phases.
+
+## UI Features
+
+- **Sidebar** – project selector, “New Project” button, iteration list.
+- **Iteration list** – shows iterations for the selected project, labeled using their database IDs (may appear non‑sequential if other projects exist).
+- **Editable project name** – inline rename persists immediately.
+- **Specification editor** – free‑form natural language.
+- **SCAD code editor** – starts blank unless an iteration is loaded; updated after fixes or new generations.
+- **Status stream** – color‑coded messages (info/success/error) with newest first.
+- **Progress bar** – coarse phase progress (rendering, evaluation, planning, completion).
+- **Preview grid** – 7 labeled PNG renders (Default, Front, Back, Left, Right, Top, Bottom), responsive 4‑column layout.
 
 ## Error Handling
 
-- **Dependency checks** – verifies that `openscad` is in `PATH` and that `OPENROUTER_API_KEY` is set before starting generation.
-- **Input validation** – the spec must not be empty; the UI prevents submission otherwise.
-- **Rendering errors** – up to three automatic fix attempts are made. Errors are streamed to the client and abort the loop if unrecoverable.
-- **LLM errors** – API failures, missing or malformed JSON, and other issues are captured and reported via SSE.
-- **Database errors** – PDO is configured with `ERRMODE_EXCEPTION`; any exception aborts the current request and is sent to the client.
-- **SSE connection issues** – the client closes the EventSource on error; the server cleans up temporary files.
+- **Dependency checks** – fail fast if `openscad` missing or `OPENROUTER_API_KEY` unset.
+- **Input validation** – reject empty specification.
+- **Rendering retries** – up to 3 fix attempts; abort loop if still failing.
+- **LLM errors** – surfaced plainly to the stream (HTTP errors, parse issues).
+- **Database exceptions** – PDO configured with exceptions; any fatal error aborts the current request.
+- **SSE robustness** – client auto‑closes on fatal error messages; server stops streaming afterward.
 
 ## Limitations
 
-- **Iteration cap** – fixed at three by default; can be changed by editing `$max_iterations` in `index.php`.
-- **No recursive modules** – the generator avoids recursive OpenSCAD modules to prevent runtime failures.
-- **Single‑user design** – the application assumes one active user; there is no authentication or multi‑user isolation.
-- **Local file system** – temporary files are stored locally; the system is not ready for distributed cloud deployments without modification.
-- **LLM dependency** – requires a stable internet connection and a valid OpenRouter API key.
-- **Image format** – only PNG output is supported.
-- **Zero build steps** – the project is intended to run out‑of‑the‑box with the listed dependencies; no additional build or compilation steps are required.
+- **Iteration cap** – default 3 (tune with `AUTOSCAD_MAX_ITERATIONS`).
+- **Single user assumption** – no auth or multi‑tenant separation.
+- **Local filesystem** – not designed for distributed execution.
+- **LLM dependence** – offline operation not supported.
+- **Image format** – only PNG exports.
+- **No recursive OpenSCAD modules encouraged** – prompts and reference discourage recursion; no static enforcement yet.
+- **Plain text protocol** – evaluation & plan not structured as JSON, so downstream automated reasoning is minimal.
 
 ## Security Considerations
 
-- **Input sanitisation** – performed only where technically necessary (e.g., spec emptiness). All other inputs are stored as‑is and rendered by OpenSCAD.
-- **Secrets management** – the API key is read from an environment variable; it is never hard‑coded.
-- **File permissions** – the PHP process must have read/write access to the temporary directory and the SQLite database.
-- **No external libraries** – the code relies solely on built‑in PHP functions to minimise attack surface.
+- **Secrets** – API key only via environment.
+- **No arbitrary upload** – user text + generated SCAD only.
+- **Shell invocation** – constrained to `openscad` (+ optional `xvfb-run`). User’s SCAD code is passed directly to OpenSCAD; risk is limited to OpenSCAD’s own execution model (geometric DSL, not general code).
+- **No third‑party PHP packages** – reduced supply chain risk.
+
+## Style & Project Constraints (Summary)
+
+(See `AGENTS.md` for authoritative rules.)
+- Pure functions where practical; side effects isolated (DB, rendering, HTTP).
+- No third‑party dependencies.
+- Prefer functions over classes; no method logic in data containers.
+- Zero build steps (run directly with PHP + OpenSCAD installed).
+- Consistent snake_case naming moving forward (backend and frontend migration in progress).
+
+## Extensibility Notes
+
+Potential future improvements:
+- Structured (optional) machine‑readable evaluation via a toggle.
+- Per‑project sequential iteration numbering (derived, not stored).
+- Optional lint/pass for recursive module detection.
+- Enhanced timeout and retry logic for LLM calls.
 
 ---
 
-_This SPEC reflects the current state of the codebase as of commit 527d9c8._
+_This SPEC reflects the updated behavior after migrating to plain text evaluation & planning and confirming the default model `google/gemma-3-27b-it` with environment overrides._
